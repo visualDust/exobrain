@@ -1,0 +1,198 @@
+version: "0.1.0" # ExoBrain version, auto-updated during init
+models:
+  default: gpt-5-mini
+  providers:
+    openai:
+      api_key: ${OPENAI_API_KEY}
+      base_url: https://api.openai.com/v1
+      models:
+        - gpt-5-pro
+        - gpt-5
+        - gpt-5-mini
+        - gpt-5-nano
+        - gpt-4
+        - gpt-4o
+        - gpt-4o-mini
+        - gpt-3.5-turbo
+      default_params:
+        temperature: 0.7
+        max_tokens: 32768
+    gemini:
+      api_key: ${GOOGLE_API_KEY}
+      base_url: https://generativelanguage.googleapis.com/v1beta
+      models:
+        - gemini-2.5-flash
+        - gemini-2.5-pro
+        - gemini-2.0-flash
+        - gemini-2.0-flash-exp
+      default_params:
+        temperature: 0.7
+        max_tokens: 32768
+    local:
+      base_url: http://localhost:8000/v1
+      models:
+        - Qwen/Qwen3-30B-A3B-Instruct-2507-FP8
+      default_params:
+        temperature: 0.7
+        max_tokens: 32768
+agent:
+  system_prompt: "You are ExoBrain, a personal AI assistant focused on productivity."
+  constitution_file: # If empty, defaults to builtin-default. Options: builtin-default, builtin-coding
+  max_iterations: 500 # Maximum autonomous iterations per user message. Use negative value (e.g., -1) for unlimited iterations
+  stream: true
+tools:
+  file_system: true
+  web_access: true
+  location: true
+  code_execution: true
+  shell_execution: true
+  time_management: true
+permissions:
+  file_system:
+    enabled: true
+    allowed_paths: [] # Empty list means no restrictions, all paths allowed
+    denied_paths:
+      - ~/.ssh
+      - ~/.aws
+      - ~/.config
+      - ~/.*credentials*
+    max_file_size: 10485760
+    allow_edit: false
+  code_execution:
+    enabled: true
+    timeout: 30
+    memory_limit: 512MB
+    network_access: true
+  shell_execution:
+    enabled: true
+    timeout: 30
+    allowed_directories:
+      - ~/repos
+      - ~/Documents
+      - ~/Desktop
+    denied_directories:
+      - ~/.ssh
+      - ~/.aws
+      - ~/.config
+      - /etc
+      - /sys
+      - /proc
+    allowed_commands:
+      - ls
+      - ls *
+      - pwd
+      - echo *
+      - cat *
+      - head *
+      - tail *
+      - grep *
+      - find *
+      - tree *
+      - du *
+      - df *
+      - ps *
+      - top
+      - htop
+      - which *
+      - git *
+      - hg *
+      - svn *
+      - python *
+      - python3 *
+      - pip *
+      - pip3 *
+      - poetry *
+      - npm *
+      - node *
+      - conda *
+      - mkdir *
+      - touch *
+      - cp *
+      - mv *
+      - wget *
+      - curl *
+      - ping *
+    denied_commands:
+      - rm -rf /
+      - rm -rf /*
+      - rm -rf ~
+      - rm -rf ~/*
+      - sudo rm *
+      - sudo *
+      - su *
+      - dd *
+      - mkfs *
+      - fdisk *
+      - parted *
+      - shutdown *
+      - reboot *
+      - poweroff *
+      - init *
+      - systemctl *
+      - kill -9 *
+      - killall *
+      - pkill *
+      - ":(){ :|:& };:"
+      - chmod -R 777 *
+      - chmod 777 *
+  web_access:
+    enabled: true
+    max_results: 5
+    max_content_length: 10000
+  location:
+    enabled: true
+    provider_url: https://ipinfo.io/json
+    timeout: 10
+    # token: <OPTIONAL_TOKEN>
+skills:
+  enabled: true
+  skills_dir: ~/.exobrain/skills
+  builtin_skills:
+    - note_manager
+  auto_load: true
+mcp:
+  enabled: true
+  servers: []
+  context7:
+    enabled: true
+    api_key: ${CONTEXT7_API_KEY}
+    endpoint: https://api.context7.com/v1/search
+    max_results: 5
+    timeout: 20
+memory:
+  short_term:
+    max_messages: 50
+    summarize_threshold: 40
+  long_term:
+    enabled: true
+    storage_path: ~/.exobrain/data/conversations
+    auto_save_interval: 60
+  working:
+    max_items: 20
+cli:
+  theme: auto
+  show_timestamps: false
+  show_token_usage: true
+  syntax_highlighting: true
+  render_markdown: true
+logging:
+  level: INFO
+  file: ~/.exobrain/logs/exobrain.log
+  rotate: true
+  max_size: 10485760
+  backup_count: 5
+  format: "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"
+  audit:
+    enabled: true
+    file: ~/.exobrain/logs/audit.log
+performance:
+  cache:
+    enabled: true
+    ttl: 3600
+    max_size: 250
+  concurrency:
+    max_concurrent_requests: 5
+    max_concurrent_tools: 3
+  background_tasks:
+    enabled: true
+    max_workers: 3

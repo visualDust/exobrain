@@ -1,0 +1,3 @@
+[submodule "exobrain/skills/anthropic"]
+    path = exobrain/skills/anthropic
+    url = https://github.com/anthropics/skills.git
