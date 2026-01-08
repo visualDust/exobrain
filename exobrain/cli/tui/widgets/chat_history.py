@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Literal
 
 from textual.containers import VerticalScroll
-from textual.widget import Widget
 
 from exobrain.cli.tui.widgets.message import MessageWidget, StreamingMessage
 

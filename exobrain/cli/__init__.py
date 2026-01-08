@@ -1,22 +1,14 @@
 """CLI entry point for ExoBrain."""
 
-import asyncio
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
 import click
 from rich.console import Console
-from rich.live import Live
-from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.prompt import Prompt
 
 from exobrain.agent.core import Agent
-from exobrain.cli.chat_permissions import request_permission, update_permission
-from exobrain.cli.chat_ui import CLIStatusHandler, ToolCallDisplay
-from exobrain.cli.config_commands import config_group
 from exobrain.cli.config_wizard import init_config
 from exobrain.cli.constitution_commands import constitution_group
 from exobrain.cli.mcp_commands import mcp
@@ -42,10 +34,6 @@ from exobrain.tools.web_tools import WebFetchTool, WebSearchTool
 
 console = Console()
 logger = logging.getLogger(__name__)
-
-# Global reference to current agent and config for permission updates
-_current_agent = None
-_current_config = None
 
 
 def load_constitution(constitution_path: str | Path | None = None) -> str:

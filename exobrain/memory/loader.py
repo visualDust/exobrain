@@ -39,14 +39,10 @@ class TokenBudgetCalculator:
         reserved_response = 4096  # Default reservation for output
 
         # Load percentage from config
-        load_percentage = getattr(
-            self.config.memory.long_term, "load_percentage", 0.5
-        )
+        load_percentage = getattr(self.config.memory.long_term, "load_percentage", 0.5)
 
         # Calculate available budget
-        available_for_history = (
-            context_window - system_prompt_tokens - reserved_response
-        )
+        available_for_history = context_window - system_prompt_tokens - reserved_response
         budget = int(available_for_history * load_percentage)
 
         logger.debug(

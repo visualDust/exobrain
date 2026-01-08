@@ -8,7 +8,6 @@ from typing import Iterable
 from rich.panel import Panel
 from rich.text import Text
 from textual.containers import VerticalScroll
-from textual.widget import Widget
 from textual.widgets import Static
 
 

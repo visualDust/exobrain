@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, VerticalScroll
+from textual.containers import Container
 from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Label, Static
 
@@ -538,7 +538,9 @@ class ChatApp(App):
             assistant_timestamp = datetime.now().isoformat()
 
             if self._callbacks.on_message and full_response.strip():
-                self._callbacks.on_message("assistant", full_response, timestamp=assistant_timestamp)
+                self._callbacks.on_message(
+                    "assistant", full_response, timestamp=assistant_timestamp
+                )
 
             # Save all new messages including tool messages
             if self._agent and self._callbacks.on_message:

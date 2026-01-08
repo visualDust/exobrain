@@ -1,13 +1,11 @@
 # ExoBrain
 
-A toy AI assistant with tool calling capabilities and file system access, running in your terminal with or without TUI. 
+A toy AI assistant with tool calling capabilities and file system access, running in your terminal with or without TUI.
 
 ![ExoBrain Demo with GPT5 API](screenshot.gif)
 
 ![PyPI - Version](https://img.shields.io/pypi/v/exobrain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-
 
 ## Features
 
@@ -19,7 +17,6 @@ A toy AI assistant with tool calling capabilities and file system access, runnin
 - 🔒 **Permission Control** - Fine-grained permission requests and access control
 - 💬 **Session Management** - Project-level and global session storage
 - 📜 **Constitutional AI** - Customizable behavioral guidelines
-
 
 The purpose of this project is to experiment with building a modular AI assistant that can integrate multiple models, and tools, with full control and transparency. Only use it for fun, not for production.
 

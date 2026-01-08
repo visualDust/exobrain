@@ -82,9 +82,7 @@ class SkillLoader:
             content = f.read()
 
         # Parse YAML frontmatter
-        frontmatter_match = re.match(
-            r"^---\s*\n(.*?)\n---\s*\n(.*)", content, re.DOTALL
-        )
+        frontmatter_match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)", content, re.DOTALL)
 
         if not frontmatter_match:
             logger.warning(f"No frontmatter found in {skill_file}")
@@ -152,10 +150,7 @@ class SkillLoader:
         results = []
 
         for skill in self.skills.values():
-            if (
-                query_lower in skill.name.lower()
-                or query_lower in skill.description.lower()
-            ):
+            if query_lower in skill.name.lower() or query_lower in skill.description.lower():
                 results.append(skill)
 
         return results

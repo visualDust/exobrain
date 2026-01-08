@@ -17,8 +17,6 @@ class ChatTextArea(TextArea):
     class Submit(Message):
         """Message sent when user presses Ctrl+Enter."""
 
-        pass
-
     def _on_key(self, event: Key) -> None:
         """Handle key events before default processing."""
         # Ctrl+Enter can appear as different key combinations depending on terminal

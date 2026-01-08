@@ -1,7 +1,7 @@
 """Skills manager for selecting and applying skills to agents."""
 
 import logging
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from exobrain.skills.loader import Skill
 
@@ -19,9 +19,7 @@ class SkillsManager:
         """
         self.skills = skills
 
-    def select_skills_for_query(
-        self, query: str, max_skills: int = 3
-    ) -> List[Skill]:
+    def select_skills_for_query(self, query: str, max_skills: int = 3) -> List[Skill]:
         """Select relevant skills based on user query.
 
         Args:
@@ -47,8 +45,7 @@ class SkillsManager:
 
         if selected:
             logger.info(
-                f"Selected {len(selected)} skills for query: "
-                f"{[s.name for s in selected]}"
+                f"Selected {len(selected)} skills for query: " f"{[s.name for s in selected]}"
             )
 
         return selected

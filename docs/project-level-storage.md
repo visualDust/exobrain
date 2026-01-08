@@ -28,11 +28,13 @@ ExoBrain supports project-level storage through the `.exobrain/` directory in yo
 The project-level configuration file has the **highest priority** in the configuration hierarchy.
 
 **Loading Priority** (lowest to highest):
+
 1. Default config (builtin) - Hard-coded defaults in the application
 2. User global config (`~/.config/exobrain/config.yaml` or `~/.exobrain/config.yaml`)
 3. **Project-level config (`./.exobrain/config.yaml`)** ← Highest priority
 
 **Loading Logic:**
+
 - Configurations are loaded sequentially and **deep merged**
 - Each layer only needs to specify overrides (partial configuration)
 - Nested dictionaries are merged recursively (not replaced entirely)
@@ -43,6 +45,7 @@ The project-level configuration file has the **highest priority** in the configu
 **Example:**
 
 If your user config has:
+
 ```yaml
 models:
   default: "openai/gpt-4o"
@@ -53,22 +56,24 @@ models:
 ```
 
 And your project config has:
+
 ```yaml
 models:
   default: "openai/gpt-4o-mini"
   providers:
     openai:
-      models: ["gpt-4o-mini"]  # Override only the models list
+      models: ["gpt-4o-mini"] # Override only the models list
 ```
 
 The final merged result will be:
+
 ```yaml
 models:
-  default: "openai/gpt-4o-mini"         # Overridden by project
+  default: "openai/gpt-4o-mini" # Overridden by project
   providers:
     openai:
-      api_key: "${OPENAI_API_KEY}"      # Inherited from user config
-      models: ["gpt-4o-mini"]           # Overridden by project (list replaced)
+      api_key: "${OPENAI_API_KEY}" # Inherited from user config
+      models: ["gpt-4o-mini"] # Overridden by project (list replaced)
 ```
 
 ### Constitutions (`constitutions/`)
@@ -76,6 +81,7 @@ models:
 Constitution files define the AI's personality and behavior guidelines using markdown format.
 
 **Loading Priority** (lowest to highest):
+
 1. Package built-in constitutions (`exobrain/constitutions/*.md`)
 2. User global constitutions (`~/.config/exobrain/constitutions/*.md`)
 3. **Project-level constitutions (`./.exobrain/constitutions/*.md`)**
@@ -83,6 +89,7 @@ Constitution files define the AI's personality and behavior guidelines using mar
 5. Project root (`./CONSTITUTION.md` or `./{name}.md`) ← Highest priority
 
 **Loading Logic:**
+
 - When a constitution is referenced by name (e.g., `"my-constitution"`), all locations are searched
 - The **highest priority match** is used (last found wins)
 - If multiple locations have the same constitution file, only the highest priority one is loaded
@@ -92,6 +99,7 @@ Constitution files define the AI's personality and behavior guidelines using mar
 - If the path is absolute, that specific file is used directly
 
 **Usage:**
+
 - List available constitutions: `exobrain constitution list`
 - View a constitution: `exobrain constitution show <name>`
 - Switch constitution: `exobrain constitution use <name>`
@@ -102,12 +110,14 @@ Constitution files define the AI's personality and behavior guidelines using mar
 Skills are reusable agent capabilities defined in `SKILL.md` files with YAML frontmatter.
 
 **Loading Priority** (lowest to highest):
+
 1. Anthropic skills (builtin) - `exobrain/skills/anthropic/skills/`
 2. Configured skills directory (from `config.skills.skills_dir`, e.g., `~/.exobrain/skills`)
 3. User global skills (`~/.exobrain/skills`) - if different from configured path
 4. **Project-level skills (`./.exobrain/skills`)** ← Highest priority
 
 **Loading Logic:**
+
 - All configured skill paths are scanned recursively for `SKILL.md` files
 - Skills are loaded in priority order (lowest to highest)
 - Skills with the same `name` field: **higher priority overwrites lower priority**
@@ -118,6 +128,7 @@ Skills are reusable agent capabilities defined in `SKILL.md` files with YAML fro
 - Skills can be selectively enabled/disabled via configuration
 
 **Skill File Format:** (see also [agentskills.io/specification](https://agentskills.io/specification))
+
 ```markdown
 ---
 name: my-skill
@@ -136,10 +147,12 @@ Skills are automatically discovered and loaded when the application starts. No m
 Project-level conversation storage keeps chat history separate per project.
 
 **Storage Priority:**
+
 - **Project storage**: `./.exobrain/conversations/` (when `--project` flag is used)
 - **Global storage**: `~/.exobrain/data/conversations/` (default)
 
 **Loading Logic:**
+
 - The storage location is determined at chat session start based on CLI flags
 - If `--project` flag is used, conversations are stored in `./.exobrain/conversations/`
 - If `--global` flag is used, conversations are stored in `~/.exobrain/data/conversations/`
@@ -152,6 +165,7 @@ Project-level conversation storage keeps chat history separate per project.
 - Token budget can limit how many messages are loaded (most recent first)
 
 **Session Structure:**
+
 ```
 conversations/
 ├── sessions.json           # Index of all sessions
@@ -162,6 +176,7 @@ conversations/
 ```
 
 **Usage:**
+
 - Use project storage: `exobrain chat --project` or `exobrain ask --project "question"`
 - Use global storage: `exobrain chat --global` or `exobrain chat -g`
 - List sessions: `exobrain history list`
@@ -173,10 +188,12 @@ conversations/
 Project-level logs are automatically used when the `.exobrain/logs/` directory exists.
 
 **Loading Priority:**
+
 1. Project-level logs (`./.exobrain/logs/exobrain.log`) - if directory exists
 2. Global logs (from config, typically `~/.exobrain/logs/exobrain.log`)
 
 **Loading Logic:**
+
 - At application startup, the system checks if `.exobrain/logs/` exists in the current directory
 - If it exists, logs are written to `.exobrain/logs/exobrain.log`
 - Otherwise, logs are written to the path specified in the configuration
@@ -184,6 +201,7 @@ Project-level logs are automatically used when the `.exobrain/logs/` directory e
 - Only the output path is automatically switched for project-level logging
 
 Logs include:
+
 - Application events and lifecycle
 - Model API interactions
 - Tool execution and results
@@ -240,6 +258,7 @@ The hierarchical loading system ensures that more specific configurations overri
 5. **Logs**: Automatic detection (project dir exists → use project logs)
 
 This design allows you to:
+
 - Have sensible defaults that work everywhere
 - Customize your personal preferences globally
 - Override specific settings per project
@@ -256,20 +275,24 @@ This design allows you to:
 ## Best Practices
 
 1. **Version Control**:
+
    - **DO commit**: `.exobrain/config.yaml`, `.exobrain/constitutions/`, `.exobrain/skills/`
    - **DON'T commit**: `.exobrain/conversations/`, `.exobrain/logs/` (add to `.gitignore`)
 
 2. **Configuration**:
+
    - Keep project configs minimal (only override what's necessary)
    - Use environment variables for sensitive data (e.g., `${OPENAI_API_KEY}`)
    - Leverage deep merging to avoid duplicating entire config sections
 
 3. **Constitutions**:
+
    - Create project-specific personalities for different contexts
    - Document the purpose and behavior guidelines clearly
    - Consider using project root `CONSTITUTION.md` for the primary project personality
 
 4. **Skills**:
+
    - Create reusable skills for common project tasks
    - Share useful skills across projects via global skills directory
    - Use descriptive names to avoid conflicts
@@ -295,21 +318,25 @@ This design allows you to:
 ## Troubleshooting
 
 **Configuration not taking effect?**
+
 - Check which config has highest priority: `exobrain config show`
 - Verify your project config syntax with a YAML linter
 - Look for error messages in logs about config validation
 
 **Constitution not loading?**
+
 - List available constitutions: `exobrain constitution list`
 - Check the active constitution: `exobrain constitution show`
 - Verify the file exists in the expected location
 
 **Skills not available?**
+
 - Ensure `config.skills.enabled: true`
 - Check that `SKILL.md` files have valid YAML frontmatter
 - Look for skill loading errors in the logs (use `--verbose` flag)
 
 **Conversations in wrong location?**
+
 - Use `--project` or `--global` flag explicitly
 - Check current session location: `exobrain history list`
 - Verify the `.exobrain/` directory exists for project storage

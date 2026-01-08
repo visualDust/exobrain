@@ -1,6 +1,5 @@
 """Model factory for creating model providers."""
 
-from typing import Any
 
 from exobrain.config import Config, ModelProviderConfig
 from exobrain.providers.base import ModelProvider

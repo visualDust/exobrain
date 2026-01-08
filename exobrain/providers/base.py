@@ -1,7 +1,6 @@
 """Base classes for model providers."""
 
 from abc import ABC, abstractmethod
-from datetime import datetime
 from typing import Any, AsyncIterator
 
 from pydantic import BaseModel
@@ -53,7 +52,6 @@ class ModelProvider(ABC):
         Returns:
             ModelResponse or async iterator of ModelResponse chunks
         """
-        pass
 
     @abstractmethod
     async def embed(
@@ -70,19 +68,15 @@ class ModelProvider(ABC):
         Returns:
             List of embedding vectors
         """
-        pass
 
     @abstractmethod
     def supports_tool_calling(self) -> bool:
         """Check if the provider supports tool calling."""
-        pass
 
     @abstractmethod
     def get_context_window(self) -> int:
         """Get the context window size in tokens."""
-        pass
 
     @abstractmethod
     def count_tokens(self, text: str) -> int:
         """Count tokens in a text string."""
-        pass
