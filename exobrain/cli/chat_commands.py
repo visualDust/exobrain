@@ -11,9 +11,10 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
 
-from exobrain.agent.core import Agent
+from exobrain.agent.base import Agent
 from exobrain.cli.chat_permissions import request_permission, update_permission
 from exobrain.cli.chat_ui import CLIStatusHandler, ToolCallDisplay
+from exobrain.cli.util import create_agent_from_config
 from exobrain.config import Config
 
 console = Console()
@@ -680,7 +681,7 @@ async def run_chat_session(
             # Show token usage if enabled
             if config.cli.show_token_usage:
                 # This would need to be implemented in the agent
-                pass
+                pass  # todo))
 
         except KeyboardInterrupt:
             console.print("\n[yellow]Input cancelled. Type /exit or press Ctrl+D to quit.[/yellow]")
@@ -707,7 +708,7 @@ async def run_tui_chat_session(
     """
     from pathlib import Path
 
-    from exobrain.cli.tui.app import ChatApp, ChatAppCallbacks, ChatAppConfig
+    from exobrain.cli.tui.chat.app import ChatApp, ChatAppCallbacks, ChatAppConfig
     from exobrain.memory.conversations import ConversationManager
     from exobrain.memory.loader import TokenBudgetCalculator, format_load_stats
     from exobrain.providers.base import Message

@@ -15,14 +15,14 @@ from textual.containers import Container
 from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Label, Static
 
-from exobrain.agent.core import AgentState as CoreAgentState
-from exobrain.cli.tui.widgets import ChatHistory, InputArea, StatusBar, ToolSidebar
-from exobrain.cli.tui.widgets.header import Header, HeaderInfo
-from exobrain.cli.tui.widgets.status_bar import AgentState
-from exobrain.cli.tui.widgets.tool_sidebar import ToolEvent
+from exobrain.agent.base import AgentState as CoreAgentState
+from exobrain.cli.tui.chat.widgets import ChatHistory, InputArea, StatusBar, ToolSidebar
+from exobrain.cli.tui.chat.widgets.header import Header, HeaderInfo
+from exobrain.cli.tui.chat.widgets.status_bar import AgentState
+from exobrain.cli.tui.chat.widgets.tool_sidebar import ToolEvent
 
 if TYPE_CHECKING:
-    from exobrain.agent.core import Agent
+    from exobrain.agent.base import Agent
 
 
 @dataclass

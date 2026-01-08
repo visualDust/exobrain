@@ -66,7 +66,6 @@ class SkillsConfig(BaseModel):
 
     enabled: bool = True
     skills_dir: str = "~/.exobrain/skills"
-    builtin_skills: list[str] = Field(default_factory=list)
     auto_load: bool = True
 
 
@@ -99,9 +98,7 @@ class CLIConfig(BaseModel):
     """CLI configuration."""
 
     theme: str = "auto"
-    show_timestamps: bool = False
     show_token_usage: bool = True
-    syntax_highlighting: bool = True
     render_markdown: bool = True
 
 
@@ -112,16 +109,8 @@ class LoggingConfig(BaseModel):
     file: str = "~/.exobrain/logs/exobrain.log"
     rotate: bool = True
     max_size: int = 10485760
-    backup_count: int = 5
     format: str = "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"
     audit: dict[str, Any] = Field(default_factory=dict)
-
-
-class PerformanceConfig(BaseModel):
-    """Performance configuration."""
-
-    cache: dict[str, Any] = Field(default_factory=dict)
-    concurrency: dict[str, Any] = Field(default_factory=dict)
 
 
 class Config(BaseModel):
@@ -137,7 +126,6 @@ class Config(BaseModel):
     memory: MemoryConfig
     cli: CLIConfig
     logging: LoggingConfig
-    performance: PerformanceConfig
 
 
 def expand_env_vars(data: Any) -> Any:
@@ -238,7 +226,6 @@ def get_default_config() -> dict[str, Any]:
         "memory": {},
         "cli": {},
         "logging": {},
-        "performance": {},
     }
 
 
@@ -425,7 +412,6 @@ def create_default_config(output_path: str | Path) -> None:
         "skills": {
             "enabled": True,
             "skills_dir": "~/.exobrain/skills",
-            "builtin_skills": ["note_manager"],
             "auto_load": True,
         },
         "mcp": {"enabled": False, "servers": []},
@@ -434,16 +420,13 @@ def create_default_config(output_path: str | Path) -> None:
             "long_term": {
                 "enabled": True,
                 "storage_path": "~/.exobrain/data/conversations",
-                "auto_save_interval": 60,
             },
             "save_tool_history": True,
             "tool_content_max_length": 1000,
         },
         "cli": {
             "theme": "auto",
-            "show_timestamps": False,
             "show_token_usage": True,
-            "syntax_highlighting": True,
             "render_markdown": True,
         },
         "logging": {
@@ -451,16 +434,8 @@ def create_default_config(output_path: str | Path) -> None:
             "file": "~/.exobrain/logs/exobrain.log",
             "rotate": True,
             "max_size": 10485760,
-            "backup_count": 5,
             "format": "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s",
             "audit": {"enabled": True, "file": "~/.exobrain/logs/audit.log"},
-        },
-        "performance": {
-            "cache": {"enabled": True, "ttl": 3600, "max_size": 100},
-            "concurrency": {
-                "max_concurrent_requests": 5,
-                "max_concurrent_tools": 3,
-            },
         },
     }
 

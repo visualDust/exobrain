@@ -8,7 +8,7 @@ from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.text import Text
 
-from exobrain.agent.core import AgentState
+from exobrain.agent.base import AgentState
 
 
 class StatusPanel:

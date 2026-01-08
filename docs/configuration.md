@@ -235,8 +235,6 @@ Configure skill loading and management.
 skills:
   enabled: true
   skills_dir: ~/.exobrain/skills # Custom skills directory
-  builtin_skills:
-    - note_manager
   auto_load: true # Auto-load skills from skills_dir
 ```
 
@@ -306,7 +304,6 @@ memory:
   long_term:
     enabled: true
     storage_path: ~/.exobrain/data/conversations
-    auto_save_interval: 60 # seconds
   working:
     max_items: 20
   save_tool_history: true # Save tool execution results
@@ -333,9 +330,7 @@ Configure CLI behavior and appearance.
 ```yaml
 cli:
   theme: auto # auto, light, dark
-  show_timestamps: false
   show_token_usage: true
-  syntax_highlighting: true
   render_markdown: true # Render assistant responses as markdown
 ```
 
@@ -349,7 +344,6 @@ logging:
   file: ~/.exobrain/logs/exobrain.log
   rotate: true
   max_size: 10485760 # 10MB
-  backup_count: 5
   format: "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"
   audit:
     enabled: true
@@ -363,24 +357,6 @@ logging:
 - `WARNING` - Warning messages
 - `ERROR` - Error messages
 - `CRITICAL` - Critical error messages
-
-### 11. Performance
-
-Configure performance and caching settings.
-
-```yaml
-performance:
-  cache:
-    enabled: true
-    ttl: 3600 # seconds
-    max_size: 250 # max cache entries
-  concurrency:
-    max_concurrent_requests: 5
-    max_concurrent_tools: 3
-  background_tasks:
-    enabled: true
-    max_workers: 3
-```
 
 ## Environment Variables
 

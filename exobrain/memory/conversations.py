@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from exobrain.memory.storage import ConversationStorage
-from exobrain.providers.base import Message
+from exobrain.providers.base import Message, ModelProvider
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ class ConversationManager:
     def __init__(
         self,
         storage_path: Path,
-        model_provider: Any,
+        model_provider: ModelProvider,
         save_tool_history: bool = True,
         tool_content_max_length: int = 1000,
     ):
