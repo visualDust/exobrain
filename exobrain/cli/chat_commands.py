@@ -770,7 +770,6 @@ async def run_tui_chat_session(
     history_preview: list[dict[str, str]] = []
     history_truncated = False
     initial_tool_events: list[dict[str, str]] = []
-    initial_tool_events: list[dict[str, str]] = []
 
     # Handle session continuation
     if session_mode.get("session_id"):
@@ -781,7 +780,6 @@ async def run_tui_chat_session(
             current_session_id = session_id
             history_preview, history_truncated = _prepare_history_preview(session_data["messages"])
             first_user_message = False
-            initial_tool_events = _extract_tool_events(session_data["messages"])
             initial_tool_events = _extract_tool_events(session_data["messages"])
 
             for msg_data in session_data["messages"]:
