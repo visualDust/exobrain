@@ -478,6 +478,10 @@ async def run_chat_session(
     model_info = (
         f"[dim]Model: {agent.model_provider.model}[/dim]" if agent and agent.model_provider else ""
     )
+    constitution_info = ""
+    if config and hasattr(config, "agent") and hasattr(config.agent, "constitution_file"):
+        constitution_name = config.agent.constitution_file or "builtin-default"
+        constitution_info = f"[dim]Constitution: {constitution_name}[/dim]"
     tool_info = ""
     if agent and agent.tool_registry:
         tool_count = len(agent.tool_registry.list_tools())
@@ -492,6 +496,7 @@ async def run_chat_session(
             "Your personal AI assistant\n\n"
             f"{scope_info}\n"
             f"{model_info}\n"
+            f"{constitution_info}\n"
             f"{tool_info}\n"
             f"{skills_info}\n\n"
             "Commands:\n"
@@ -839,6 +844,10 @@ async def run_tui_chat_session(
             session_name = session_info.get("title")
 
     # Create app config
+    constitution_name = None
+    if config and hasattr(config, "agent") and hasattr(config.agent, "constitution_file"):
+        constitution_name = config.agent.constitution_file or "builtin-default"
+
     app_config = ChatAppConfig(
         title="ExoBrain 🧠",
         subtitle="AI Assistant",
@@ -848,6 +857,7 @@ async def run_tui_chat_session(
         config_path=config_path,
         working_dir=str(Path.cwd()),
         model=agent.model_provider.model if agent.model_provider else None,
+        constitution=constitution_name,
         session_id=current_session_id,
         session_name=session_name,
     )

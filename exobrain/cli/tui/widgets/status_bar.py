@@ -106,12 +106,18 @@ class StatusBar(Static):
             self.refresh()
 
     def set_meta(
-        self, model: str | None = None, tools: int | None = None, skills: int | None = None
+        self,
+        model: str | None = None,
+        constitution: str | None = None,
+        tools: int | None = None,
+        skills: int | None = None,
     ) -> None:
-        """Set static metadata such as model and tool/skill counts."""
+        """Set static metadata such as model, constitution, and tool/skill counts."""
         parts: list[str] = []
         if model:
             parts.append(model)
+        if constitution:
+            parts.append(f"📜 {constitution}")
         if tools is not None:
             parts.append(f"🛠️  {tools}")
         if skills is not None:

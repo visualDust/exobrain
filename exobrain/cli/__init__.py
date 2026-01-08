@@ -328,6 +328,30 @@ def create_agent_from_config(
         stream=config.agent.stream,
     )
 
+    # Debug: Calculate character counts for constitution, skills, and tools
+    import json
+
+    constitution_chars = len(constitution_content) if constitution_content else 0
+    skills_chars = len(skills_summary) if skills_manager and skills_summary else 0
+
+    # Calculate tools schema size (JSON representation)
+    tools_schemas = []
+    for tool in tools:
+        # Use Anthropic format as it's more compact and commonly used
+        schema = tool.to_anthropic_format()
+        tools_schemas.append(schema)
+    tools_json = json.dumps(tools_schemas, ensure_ascii=False)
+    tools_chars = len(tools_json)
+
+    # Log debug information
+    logger.info(
+        f"Model context usage (characters):\n"
+        f"  Constitution: {constitution_chars:,} chars\n"
+        f"  Skills summary: {skills_chars:,} chars\n"
+        f"  Tools schemas: {tools_chars:,} chars ({len(tools)} tools)\n"
+        f"  Total: {constitution_chars + skills_chars + tools_chars:,} chars"
+    )
+
     return agent, skills_manager
 
 

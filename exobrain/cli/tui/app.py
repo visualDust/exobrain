@@ -49,6 +49,7 @@ class ChatAppConfig:
     config_path: Optional[str] = None
     working_dir: Optional[str] = None
     model: Optional[str] = None
+    constitution: Optional[str] = None
     session_id: Optional[str] = None
     session_name: Optional[str] = None
 
@@ -246,11 +247,14 @@ class ChatApp(App):
         # Set model/tool/skill meta in status bar (update in case agent was reattached)
         status_bar = self.query_one("#status-bar", StatusBar)
         model_name = self._config.model
+        constitution_name = self._config.constitution
         tool_count = len(self._agent.tool_registry.list_tools()) if self._agent else None
         skill_count = None
         if getattr(self, "_skills_manager", None) and getattr(self._skills_manager, "skills", None):
             skill_count = len(self._skills_manager.skills)
-        status_bar.set_meta(model=model_name, tools=tool_count, skills=skill_count)
+        status_bar.set_meta(
+            model=model_name, constitution=constitution_name, tools=tool_count, skills=skill_count
+        )
 
         # Show welcome message
         if self._config.show_welcome:
