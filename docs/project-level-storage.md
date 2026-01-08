@@ -21,6 +21,8 @@ ExoBrain supports project-level storage through the `.exobrain/` directory in yo
     └── exobrain.log        # Application logs
 ```
 
+There is a global configuration and storage located in the user's home directory (e.g., `~/.exobrain/`). The project-level `.exobrain/` directory allows overriding and extending these global settings on a per-project basis.
+
 ## Component Details
 
 ### Configuration (`config.yaml`)
