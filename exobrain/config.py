@@ -92,6 +92,8 @@ class MemoryConfig(BaseModel):
 
     short_term: dict[str, Any] = Field(default_factory=dict)
     long_term: dict[str, Any] = Field(default_factory=dict)
+    save_tool_history: bool = True  # Save tool messages to conversation history
+    tool_content_max_length: int = 1000  # Maximum length of tool message content to save
 
 
 class CLIConfig(BaseModel):
@@ -431,6 +433,8 @@ def create_default_config(output_path: str | Path) -> None:
                 "storage_path": "~/.exobrain/data/conversations",
                 "auto_save_interval": 60,
             },
+            "save_tool_history": True,
+            "tool_content_max_length": 1000,
         },
         "cli": {
             "theme": "auto",

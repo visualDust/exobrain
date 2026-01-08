@@ -169,6 +169,8 @@ memory:
     auto_save_interval: 60
   working:
     max_items: 20
+  save_tool_history: true # Save tool execution results to conversation history
+  tool_content_max_length: 500 # Maximum length of tool message content to save (characters)
 cli:
   theme: auto
   show_timestamps: false

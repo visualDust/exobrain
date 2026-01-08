@@ -248,8 +248,25 @@ def init_config():
             )
             sys.exit(0)
 
-    # Run wizard
-    config = run_config_wizard()
+    # Ask if user wants to use the wizard
+    use_wizard = Confirm.ask(
+        "\nWould you like to use the interactive configuration wizard?",
+        default=False,
+    )
+
+    if use_wizard:
+        # Run wizard
+        config = run_config_wizard()
+    else:
+        # Load example config directly
+        console.print("\n[dim]Using default configuration from example...[/dim]")
+        try:
+            config = load_example_config()
+            config["version"] = __version__
+            console.print("[green]✓[/green] Loaded example configuration")
+        except FileNotFoundError as e:
+            console.print(f"[red]Error: {e}[/red]")
+            sys.exit(1)
 
     # Ensure directory exists
     config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -264,10 +281,11 @@ def init_config():
             sort_keys=False,
         )
 
+    # Show success message with config path
     console.print(
         Panel.fit(
-            f"[green]✓ Configuration created successfully![/green]\n\n"
-            f"Location: [cyan]{config_path}[/cyan]\n\n"
+            f"[green]✓ Configuration saved to:[/green]\n"
+            f"[cyan]{config_path}[/cyan]\n\n"
             f"You can now start using ExoBrain:\n"
             f"  [bold]exobrain chat[/bold]\n\n"
             f"To modify your configuration:\n"

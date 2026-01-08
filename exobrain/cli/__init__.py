@@ -667,7 +667,10 @@ async def run_chat_session(
 
     # Initialize conversation manager
     conversation_manager = ConversationManager(
-        storage_path=conversations_path, model_provider=agent.model_provider
+        storage_path=conversations_path,
+        model_provider=agent.model_provider,
+        save_tool_history=config.memory.save_tool_history,
+        tool_content_max_length=config.memory.tool_content_max_length,
     )
 
     # Initialize token budget calculator
@@ -726,6 +729,8 @@ async def run_chat_session(
                 project_manager = ConversationManager(
                     storage_path=project_conversations_path,
                     model_provider=agent.model_provider,
+                    save_tool_history=config.memory.save_tool_history,
+                    tool_content_max_length=config.memory.tool_content_max_length,
                 )
                 project_session = project_manager.get_current_session()
 
@@ -733,6 +738,8 @@ async def run_chat_session(
                 global_manager = ConversationManager(
                     storage_path=global_conversations_path,
                     model_provider=agent.model_provider,
+                    save_tool_history=config.memory.save_tool_history,
+                    tool_content_max_length=config.memory.tool_content_max_length,
                 )
                 global_session = global_manager.get_current_session()
 
@@ -1086,7 +1093,10 @@ async def run_tui_chat_session(
 
     # Initialize conversation manager
     conversation_manager = ConversationManager(
-        storage_path=conversations_path, model_provider=agent.model_provider
+        storage_path=conversations_path,
+        model_provider=agent.model_provider,
+        save_tool_history=config.memory.save_tool_history,
+        tool_content_max_length=config.memory.tool_content_max_length,
     )
 
     # Initialize token budget calculator
@@ -1210,7 +1220,13 @@ async def run_tui_chat_session(
     agent.status_callback = app.handle_agent_status
 
     # Callback to save messages
-    def on_message(role: str, content: str) -> None:
+    def on_message(
+        role: str,
+        content: str,
+        name: str | None = None,
+        tool_call_id: str | None = None,
+        timestamp: str | None = None,
+    ) -> None:
         nonlocal current_session_id, first_user_message
 
         # Create session on first user message
@@ -1223,7 +1239,13 @@ async def run_tui_chat_session(
 
         # Save message
         if current_session_id:
-            msg = Message(role=role, content=content)
+            msg = Message(
+                role=role,
+                content=content,
+                name=name,
+                tool_call_id=tool_call_id,
+                timestamp=timestamp,
+            )
             conversation_manager.save_message(current_session_id, msg)
 
             # Auto-generate title from first user message
@@ -1560,6 +1582,8 @@ def sessions_list(ctx: click.Context, limit: int) -> None:
         project_manager = ConversationManager(
             storage_path=project_conversations_path,
             model_provider=model_provider,
+            save_tool_history=config.memory.save_tool_history,
+            tool_content_max_length=config.memory.tool_content_max_length,
         )
         project_sessions = project_manager.list_sessions(limit=limit)
         for session in project_sessions:
@@ -1574,6 +1598,8 @@ def sessions_list(ctx: click.Context, limit: int) -> None:
         global_manager = ConversationManager(
             storage_path=global_conversations_path,
             model_provider=model_provider,
+            save_tool_history=config.memory.save_tool_history,
+            tool_content_max_length=config.memory.tool_content_max_length,
         )
         global_sessions = global_manager.list_sessions(limit=limit)
         for session in global_sessions:
@@ -1638,6 +1664,8 @@ def _get_conversation_manager_for_session(
         project_manager = ConversationManager(
             storage_path=project_conversations_path,
             model_provider=model_provider,
+            save_tool_history=config.memory.save_tool_history,
+            tool_content_max_length=config.memory.tool_content_max_length,
         )
         if project_manager.get_session_metadata(session_id):
             return project_manager, "project"
@@ -1649,6 +1677,8 @@ def _get_conversation_manager_for_session(
         global_manager = ConversationManager(
             storage_path=global_conversations_path,
             model_provider=model_provider,
+            save_tool_history=config.memory.save_tool_history,
+            tool_content_max_length=config.memory.tool_content_max_length,
         )
         if global_manager.get_session_metadata(session_id):
             return global_manager, "global"
@@ -1793,6 +1823,8 @@ def sessions_delete(ctx: click.Context, session_ids: tuple[str, ...], all: bool,
         project_manager = ConversationManager(
             storage_path=project_conversations_path,
             model_provider=model_provider,
+            save_tool_history=config.memory.save_tool_history,
+            tool_content_max_length=config.memory.tool_content_max_length,
         )
         managers.append(("project", project_manager))
 
@@ -1800,6 +1832,8 @@ def sessions_delete(ctx: click.Context, session_ids: tuple[str, ...], all: bool,
         global_manager = ConversationManager(
             storage_path=global_conversations_path,
             model_provider=model_provider,
+            save_tool_history=config.memory.save_tool_history,
+            tool_content_max_length=config.memory.tool_content_max_length,
         )
         managers.append(("global", global_manager))
 

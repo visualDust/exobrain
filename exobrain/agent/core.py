@@ -3,6 +3,7 @@
 import inspect
 import json
 import logging
+from datetime import datetime
 from enum import Enum
 from typing import Any, AsyncIterator
 
@@ -242,6 +243,7 @@ class Agent(BaseModel):
                         content=tool_result,
                         tool_call_id=tool_id,
                         name=tool_name,
+                        timestamp=datetime.now().isoformat(),
                     )
                     self.add_message(tool_message)
                     messages.append(tool_message)
@@ -402,6 +404,7 @@ class Agent(BaseModel):
                             content=tool_result,
                             tool_call_id=tool_id,
                             name=tool_name,
+                            timestamp=datetime.now().isoformat(),
                         )
                         self.add_message(tool_message)
                         messages.append(tool_message)

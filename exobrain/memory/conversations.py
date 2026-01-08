@@ -14,16 +14,26 @@ logger = logging.getLogger(__name__)
 class ConversationManager:
     """Manage conversation sessions (create, load, save, delete)."""
 
-    def __init__(self, storage_path: Path, model_provider: Any):
+    def __init__(
+        self,
+        storage_path: Path,
+        model_provider: Any,
+        save_tool_history: bool = True,
+        tool_content_max_length: int = 1000,
+    ):
         """Initialize conversation manager.
 
         Args:
             storage_path: Root path for conversation storage
             model_provider: Model provider for token counting
+            save_tool_history: Whether to save tool messages to conversation history
+            tool_content_max_length: Maximum length of tool message content to save
         """
         self.storage = ConversationStorage(storage_path)
         self.model_provider = model_provider
         self.sessions_index = self.storage.load_sessions_index()
+        self.save_tool_history = save_tool_history
+        self.tool_content_max_length = tool_content_max_length
 
     def create_session(self, model: str, title: str | None = None) -> str:
         """Create a new conversation session.
@@ -170,14 +180,31 @@ class ConversationManager:
             session_id: Session identifier
             message: Message to save
         """
+        # Skip tool messages if save_tool_history is disabled
+        if message.role == "tool" and not self.save_tool_history:
+            logger.debug(f"Skipping tool message (save_tool_history=False): {message.name}")
+            return
+
+        # Prepare content with truncation for tool messages
+        content = message.content
+        if message.role == "tool" and isinstance(content, str):
+            if len(content) > self.tool_content_max_length:
+                content = content[: self.tool_content_max_length] + "... [truncated]"
+                logger.debug(
+                    f"Truncated tool message content from {len(message.content)} to {self.tool_content_max_length} chars"
+                )
+
         # Count tokens
-        tokens = self.model_provider.count_tokens(message.content or "")
+        tokens = self.model_provider.count_tokens(content if isinstance(content, str) else "")
+
+        # Use message timestamp if available, otherwise use current time
+        timestamp = message.timestamp if message.timestamp else datetime.now().isoformat()
 
         # Prepare message data
         message_data = {
             "role": message.role,
-            "content": message.content,
-            "timestamp": datetime.now().isoformat(),
+            "content": content,
+            "timestamp": timestamp,
             "tokens": tokens,
         }
 

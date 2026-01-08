@@ -1,6 +1,7 @@
 """Base classes for model providers."""
 
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import Any, AsyncIterator
 
 from pydantic import BaseModel
@@ -14,6 +15,7 @@ class Message(BaseModel):
     name: str | None = None
     tool_calls: list[dict[str, Any]] | None = None
     tool_call_id: str | None = None
+    timestamp: str | None = None  # ISO format timestamp, set when message is created
 
 
 class ModelResponse(BaseModel):
