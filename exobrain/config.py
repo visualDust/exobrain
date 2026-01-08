@@ -8,7 +8,6 @@ from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +91,8 @@ class MemoryConfig(BaseModel):
 
     short_term: dict[str, Any] = Field(default_factory=dict)
     long_term: dict[str, Any] = Field(default_factory=dict)
+    save_tool_history: bool = True  # Save tool messages to conversation history
+    tool_content_max_length: int = 1000  # Maximum length of tool message content to save
 
 
 class CLIConfig(BaseModel):
@@ -382,7 +383,7 @@ def create_default_config(output_path: str | Path) -> None:
                     "api_key": "${OPENAI_API_KEY}",
                     "base_url": "https://api.openai.com/v1",
                     "models": ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"],
-                    "default_params": {"temperature": 0.7, "max_tokens": 4096},
+                    "default_params": {"temperature": 0.7},
                 }
             },
             "embedding": {
@@ -431,6 +432,8 @@ def create_default_config(output_path: str | Path) -> None:
                 "storage_path": "~/.exobrain/data/conversations",
                 "auto_save_interval": 60,
             },
+            "save_tool_history": True,
+            "tool_content_max_length": 1000,
         },
         "cli": {
             "theme": "auto",

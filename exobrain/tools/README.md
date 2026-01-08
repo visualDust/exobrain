@@ -28,7 +28,6 @@ tools/
 └── README.md            # This document
 ```
 
-
 ## Creating New Tools: Standard Process
 
 ### Step 1: Define the Tool Class
@@ -222,7 +221,7 @@ permissions:
    super().__init__(name="tool", ...)
    ```
 
-2. **`execute()` must use `**kwargs`**
+2. **`execute()` must use `**kwargs`\*\*
 
    ```python
    # ✅ Correct

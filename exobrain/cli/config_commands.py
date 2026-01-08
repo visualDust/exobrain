@@ -9,11 +9,8 @@ from typing import Any
 import click
 import yaml
 from rich.console import Console
-from rich.panel import Panel
-from rich.syntax import Syntax
-from rich.table import Table
 
-from exobrain.config import get_user_config_directory, get_user_config_path, merge_configs
+from exobrain.config import get_user_config_path
 
 console = Console()
 
@@ -126,7 +123,6 @@ def mask_sensitive_value(key: str, value: Any) -> str:
 @click.group(name="config")
 def config_group():
     """Manage ExoBrain configuration."""
-    pass
 
 
 @config_group.command()

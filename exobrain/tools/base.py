@@ -1,9 +1,9 @@
 """Base classes for tools."""
 
-from abc import ABC, abstractmethod
-from typing import Any, Callable
+from abc import abstractmethod
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class ToolParameter(BaseModel):
@@ -38,7 +38,6 @@ class Tool(BaseModel):
         Returns:
             Tool execution result
         """
-        pass
 
     def to_openai_format(self) -> dict[str, Any]:
         """Convert tool definition to OpenAI format."""
@@ -128,6 +127,5 @@ class ToolRegistry:
         return [
             tool
             for tool in self._tools.values()
-            if tool.requires_permission
-            and tool.permission_scope == permission_scope
+            if tool.requires_permission and tool.permission_scope == permission_scope
         ]

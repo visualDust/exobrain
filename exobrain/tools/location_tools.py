@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 
-from exobrain.tools.base import Tool, ToolParameter
+from exobrain.tools.base import Tool
 
 logger = logging.getLogger(__name__)
 

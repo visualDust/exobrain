@@ -2,7 +2,6 @@
 
 import json
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -147,7 +146,7 @@ class ConversationStorage:
             session_id: Session identifier
 
         Returns:
-            List of message dicts
+            List of message dicts, sorted by timestamp
         """
         messages_file = self.get_session_directory(session_id) / "messages.jsonl"
         if not messages_file.exists():
@@ -161,6 +160,10 @@ class ConversationStorage:
                         messages.append(json.loads(line))
         except Exception as e:
             logger.error(f"Failed to load messages from {session_id}: {e}")
+
+        # Sort messages by timestamp to ensure correct chronological order
+        # This is important because tool messages may be saved out of order
+        messages.sort(key=lambda m: m.get("timestamp", ""))
 
         return messages
 

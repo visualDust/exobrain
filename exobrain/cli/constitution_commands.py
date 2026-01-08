@@ -192,7 +192,6 @@ def get_current_constitution() -> Optional[str]:
 @click.group(name="constitution")
 def constitution_group():
     """Manage agent constitutions (personalities)."""
-    pass
 
 
 @constitution_group.command()

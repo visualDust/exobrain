@@ -5,12 +5,13 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, VerticalScroll
+from textual.containers import Container
 from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Label, Static
 
@@ -28,7 +29,9 @@ if TYPE_CHECKING:
 class ChatAppCallbacks:
     """Callbacks for integrating ChatApp with external systems."""
 
-    on_message: Optional[Callable[[str, str], None]] = None
+    on_message: Optional[
+        Callable[[str, str, Optional[str], Optional[str], Optional[str]], None]
+    ] = None
     on_clear: Optional[Callable[[], None]] = None
     on_exit: Optional[Callable[[], None]] = None
     permission_handler: Optional[Callable[[dict], Any]] = None
@@ -46,6 +49,7 @@ class ChatAppConfig:
     config_path: Optional[str] = None
     working_dir: Optional[str] = None
     model: Optional[str] = None
+    constitution: Optional[str] = None
     session_id: Optional[str] = None
     session_name: Optional[str] = None
 
@@ -243,11 +247,14 @@ class ChatApp(App):
         # Set model/tool/skill meta in status bar (update in case agent was reattached)
         status_bar = self.query_one("#status-bar", StatusBar)
         model_name = self._config.model
+        constitution_name = self._config.constitution
         tool_count = len(self._agent.tool_registry.list_tools()) if self._agent else None
         skill_count = None
         if getattr(self, "_skills_manager", None) and getattr(self._skills_manager, "skills", None):
             skill_count = len(self._skills_manager.skills)
-        status_bar.set_meta(model=model_name, tools=tool_count, skills=skill_count)
+        status_bar.set_meta(
+            model=model_name, constitution=constitution_name, tools=tool_count, skills=skill_count
+        )
 
         # Show welcome message
         if self._config.show_welcome:
@@ -452,7 +459,9 @@ class ChatApp(App):
         await chat_history.add_message(user_message, role="user")
 
         if self._callbacks.on_message:
-            self._callbacks.on_message("user", user_message)
+            # Generate timestamp when user submits message
+            timestamp = datetime.now().isoformat()
+            self._callbacks.on_message("user", user_message, timestamp=timestamp)
 
         self._process_message(user_message)
 
@@ -497,6 +506,9 @@ class ChatApp(App):
 
         input_area.set_enabled(False)
 
+        # Track conversation history length before processing
+        history_len_before = len(self._agent.conversation_history) if self._agent else 0
+
         try:
             if self._message_handler:
                 response_stream = self._message_handler(user_message)
@@ -526,8 +538,28 @@ class ChatApp(App):
 
             await chat_history.finalize_streaming()
 
+            # Generate timestamp for assistant response
+            assistant_timestamp = datetime.now().isoformat()
+
             if self._callbacks.on_message and full_response.strip():
-                self._callbacks.on_message("assistant", full_response)
+                self._callbacks.on_message(
+                    "assistant", full_response, timestamp=assistant_timestamp
+                )
+
+            # Save all new messages including tool messages
+            if self._agent and self._callbacks.on_message:
+                new_messages = self._agent.conversation_history[history_len_before:]
+                for msg in new_messages:
+                    # Skip user and assistant messages as they are already saved
+                    if msg.role not in ("user", "assistant"):
+                        # Save tool and other message types with full metadata including timestamp
+                        self._callbacks.on_message(
+                            msg.role,
+                            msg.content or "",
+                            name=msg.name,
+                            tool_call_id=msg.tool_call_id,
+                            timestamp=msg.timestamp,
+                        )
 
             await asyncio.sleep(0.3)
             status_bar.set_idle()
