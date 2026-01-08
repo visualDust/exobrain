@@ -175,3 +175,4 @@ Example:
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details
+Note that this project integrates third-party skills that may have their own licenses.

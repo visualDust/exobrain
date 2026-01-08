@@ -160,7 +160,7 @@ def load_default_skills(config: Any) -> SkillLoader:
     """Load skills from default locations.
 
     Skills loading priority (lowest to highest):
-    1. Anthropic skills (builtin) - exobrain/skills/anthropic/skills/
+    1. Builtin skills (submodules) - exobrain/skills/{anthropic,obsidian}/
     2. Configured skills directory - from config.skills.skills_dir
     3. User global skills - ~/.exobrain/skills
     4. Project-level skills - ./.exobrain/skills (highest priority)
@@ -173,11 +173,18 @@ def load_default_skills(config: Any) -> SkillLoader:
     """
     skill_paths = []
 
-    # 1. Add Anthropic skills (from submodule) - lowest priority
+    # 1. Add builtin skills (from submodules) - lowest priority
+    # Add Anthropic skills
     anthropic_skills_path = Path(__file__).parent / "anthropic" / "skills"
     if anthropic_skills_path.exists():
         skill_paths.append(anthropic_skills_path)
         logger.debug(f"Added Anthropic skills path: {anthropic_skills_path}")
+
+    # Add Obsidian skills
+    obsidian_skills_path = Path(__file__).parent / "obsidian"
+    if obsidian_skills_path.exists():
+        skill_paths.append(obsidian_skills_path)
+        logger.debug(f"Added Obsidian skills path: {obsidian_skills_path}")
 
     # 2. Add configured skills directory (if specified in config)
     if hasattr(config, "skills") and hasattr(config.skills, "skills_dir"):

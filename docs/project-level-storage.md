@@ -109,13 +109,15 @@ Constitution files define the AI's personality and behavior guidelines using mar
 
 ### Skills (`skills/`)
 
-Skills are reusable agent capabilities defined in `SKILL.md` files with YAML frontmatter.
+Skills are reusable agent capabilities that extend Claude's functionality. Each skill packages instructions, metadata, and optional resources (scripts, templates) that Claude uses automatically when relevant.
 
 **Loading Priority** (lowest to highest):
 
-1. Anthropic skills (builtin) - `exobrain/skills/anthropic/skills/`
-2. Configured skills directory (from `config.skills.skills_dir`, e.g., `~/.exobrain/skills`)
-3. User global skills (`~/.exobrain/skills`) - if different from configured path
+1. Builtin skills (submodules):
+   - Anthropic skills - `exobrain/skills/anthropic/skills/`
+   - Obsidian skills - `exobrain/skills/obsidian/`
+2. Configured skills directory (from `config.skills.skills_dir`)
+3. User global skills (`~/.exobrain/skills`)
 4. **Project-level skills (`./.exobrain/skills`)** ← Highest priority
 
 **Loading Logic:**
@@ -123,23 +125,76 @@ Skills are reusable agent capabilities defined in `SKILL.md` files with YAML fro
 - All configured skill paths are scanned recursively for `SKILL.md` files
 - Skills are loaded in priority order (lowest to highest)
 - Skills with the same `name` field: **higher priority overwrites lower priority**
-- Each `SKILL.md` file contains:
-  - YAML frontmatter (between `---` markers) with metadata (`name`, `description`, `license`)
-  - Markdown instructions for the AI agent
+- Skills use a **progressive disclosure** model with three loading levels:
+  - **Level 1 (Metadata)**: Always loaded at startup - only the YAML frontmatter
+  - **Level 2 (Instructions)**: Loaded when skill is triggered - the SKILL.md body
+  - **Level 3 (Resources)**: Loaded as needed - additional files and scripts
 - All loaded skills are available to the agent during runtime
 - Skills can be selectively enabled/disabled via configuration
 
-**Skill File Format:** (see also [agentskills.io/specification](https://agentskills.io/specification))
+**Skill Structure:**
+
+Skills can be organized in two ways:
+
+1. **Single file** (simple skills):
+
+   ```
+   my-skill.md         # Contains SKILL.md frontmatter and instructions
+   ```
+
+2. **Directory structure** (complex skills with resources):
+   ```
+   my-skill/
+   ├── SKILL.md         # Main instructions (required)
+   ├── FORMS.md         # Additional instructions (optional)
+   ├── REFERENCE.md     # Detailed documentation (optional)
+   └── scripts/         # Utility scripts (optional)
+       └── helper.py
+   ```
+
+**Skill File Format:** (see also [Claude Platform Docs](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview))
+
+Every skill requires a `SKILL.md` file with YAML frontmatter:
 
 ```markdown
 ---
 name: my-skill
-description: Description of what this skill does
-license: MIT
+description: What this skill does and when to use it
+license: MIT # Optional
 ---
 
-Detailed instructions for the AI agent on how to use this skill...
+# My Skill
+
+## Instructions
+
+Step-by-step guidance for Claude to follow...
+
+## Examples
+
+Concrete examples of using this skill...
+
+For more details, see [REFERENCE.md](REFERENCE.md).
 ```
+
+**Required YAML fields:**
+
+- `name` (max 64 chars, lowercase letters/numbers/hyphens only)
+- `description` (max 1024 chars, should include when to use the skill)
+
+**Progressive Loading Example:**
+
+```
+pdf-skill/
+├── SKILL.md           # Level 2: Main instructions
+├── FORMS.md           # Level 3: Form-filling guide (loaded if referenced)
+├── REFERENCE.md       # Level 3: API reference (loaded if needed)
+└── scripts/
+    └── fill_form.py   # Level 3: Executed via bash (code not in context)
+```
+
+- **Level 1**: Claude knows the skill exists and when to use it
+- **Level 2**: When triggered, Claude reads SKILL.md instructions
+- **Level 3**: Claude reads FORMS.md or runs fill_form.py only if the instructions reference them
 
 **Automatic Discovery:**
 Skills are automatically discovered and loaded when the application starts. No manual registration required.
@@ -255,7 +310,7 @@ The hierarchical loading system ensures that more specific configurations overri
 
 1. **Configuration**: Default → User Global → **Project** (deep merge)
 2. **Constitutions**: Package → User Global → Project Level → Project Dir → **Project Root** (last match wins)
-3. **Skills**: Anthropic → Configured → User Global → **Project** (same name = override)
+3. **Skills**: Builtin (Anthropic, Obsidian) → Configured → User Global → **Project** (same name = override)
 4. **Conversations**: Determined by CLI flag or automatic detection
 5. **Logs**: Automatic detection (project dir exists → use project logs)
 
