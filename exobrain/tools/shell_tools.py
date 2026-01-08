@@ -1,6 +1,7 @@
 """Shell execution tools for ExoBrain."""
 
 import asyncio
+import getpass
 import logging
 import platform
 import re
@@ -35,6 +36,11 @@ class ShellExecuteTool(Tool):
                 "working_directory": ToolParameter(
                     type="string",
                     description="The directory to execute the command in (default: current directory)",
+                    required=False,
+                ),
+                "timeout": ToolParameter(
+                    type="integer",
+                    description="Timeout in seconds for command execution (default: value from config)",
                     required=False,
                 ),
             },
@@ -151,13 +157,14 @@ class ShellExecuteTool(Tool):
         """Execute shell command.
 
         Args:
-            **kwargs: Tool parameters including 'command' and 'working_directory'
+            **kwargs: Tool parameters including 'command', 'working_directory', and 'timeout'
 
         Returns:
             Command output or error message
         """
         command = kwargs.get("command", "")
         working_directory = kwargs.get("working_directory", ".")
+        timeout = kwargs.get("timeout", self._timeout)
 
         if not command:
             return "Error: command parameter is required"
@@ -196,12 +203,12 @@ class ShellExecuteTool(Tool):
             try:
                 stdout, stderr = await asyncio.wait_for(
                     process.communicate(),
-                    timeout=self._timeout,
+                    timeout=timeout,
                 )
             except asyncio.TimeoutError:
                 process.kill()
                 await process.wait()
-                return f"Error: command timed out after {self._timeout} seconds"
+                return f"Error: command timed out after {timeout} seconds"
 
             # Decode output
             stdout_text = stdout.decode("utf-8", errors="replace").strip()
@@ -279,3 +286,40 @@ class GetOSInfoTool(Tool):
         except Exception as e:
             logger.error(f"Error getting OS information: {e}")
             return f"Error getting OS information: {e}"
+
+
+class GetUserInfoTool(Tool):
+    """Tool to get information about the current user and home directory."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="get_user_info",
+            description="Get information about the current user including username and home directory path. Use this to determine the user's identity and home folder location.",
+            parameters={},
+            requires_permission=False,
+        )
+
+    async def execute(self, **kwargs: Any) -> str:  # noqa: ARG002
+        """Get user information.
+
+        Returns:
+            User information including username and home directory path
+        """
+        try:
+            # Get username
+            username = getpass.getuser()
+
+            # Get home directory
+            home_dir = Path.home()
+
+            # Gather user information
+            info_parts = [
+                f"Username: {username}",
+                f"Home Directory: {home_dir}",
+            ]
+
+            return "\n".join(info_parts)
+
+        except Exception as e:
+            logger.error(f"Error getting user information: {e}")
+            return f"Error getting user information: {e}"

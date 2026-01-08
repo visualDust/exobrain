@@ -28,7 +28,7 @@ from exobrain.tools.file_tools import (
     WriteFileTool,
 )
 from exobrain.tools.math_tools import MathEvaluateTool
-from exobrain.tools.shell_tools import GetOSInfoTool, ShellExecuteTool
+from exobrain.tools.shell_tools import GetOSInfoTool, GetUserInfoTool, ShellExecuteTool
 from exobrain.tools.time_tools import GetCurrentTimeTool, GetWorldTimeTool
 from exobrain.tools.web_tools import WebFetchTool, WebSearchTool
 
@@ -211,6 +211,7 @@ def create_agent_from_config(
     # Math evaluation and OS info are always available and require no extra permissions
     tool_registry.register(MathEvaluateTool())
     tool_registry.register(GetOSInfoTool())
+    tool_registry.register(GetUserInfoTool())
 
     # Register shell execution tool if enabled
     if getattr(config.tools, "shell_execution", False) and config.permissions.shell_execution.get(

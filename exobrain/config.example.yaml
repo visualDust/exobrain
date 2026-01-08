@@ -62,7 +62,7 @@ permissions:
     network_access: true
   shell_execution:
     enabled: true
-    timeout: 30
+    timeout: 600 # Default timeout in seconds (10 minutes). Can be overridden per command.
     allowed_directories:
       - ~/repos
       - ~/Documents

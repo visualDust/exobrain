@@ -415,7 +415,11 @@ def create_default_config(output_path: str | Path) -> None:
                 "max_file_size": 10485760,
                 "allow_edit": False,
             },
-            "code_execution": {"enabled": False, "timeout": 30},
+            "code_execution": {"enabled": False, "timeout": 30},  # Default timeout in seconds
+            "shell_execution": {
+                "enabled": False,
+                "timeout": 600,
+            },  # Default timeout in seconds (10 minutes)
             "web_access": {"enabled": False},
         },
         "skills": {
