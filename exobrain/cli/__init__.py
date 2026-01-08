@@ -1551,13 +1551,28 @@ def sessions(ctx: click.Context) -> None:
 @sessions.command("list")
 @click.option(
     "--limit",
+    default=None,
+    type=int,
+    help="Maximum number of sessions to show (default: show all with pagination)",
+)
+@click.option(
+    "--page-size",
     default=10,
-    help="Maximum number of sessions to show per location",
+    type=int,
+    help="Number of sessions to show per page (default: 10)",
+)
+@click.option(
+    "--no-pagination",
+    is_flag=True,
+    help="Disable pagination and show all sessions at once",
 )
 @click.pass_context
-def sessions_list(ctx: click.Context, limit: int) -> None:
+def sessions_list(ctx: click.Context, limit: int | None, page_size: int, no_pagination: bool) -> None:
     """List recent conversation sessions from both project and global storage."""
     from pathlib import Path
+
+    from rich.prompt import Prompt
+    from rich.table import Table
 
     from exobrain.memory.conversations import ConversationManager
 
@@ -1585,7 +1600,7 @@ def sessions_list(ctx: click.Context, limit: int) -> None:
             save_tool_history=config.memory.save_tool_history,
             tool_content_max_length=config.memory.tool_content_max_length,
         )
-        project_sessions = project_manager.list_sessions(limit=limit)
+        project_sessions = project_manager.list_sessions(limit=limit or 10000)
         for session in project_sessions:
             session["_source"] = "project"
             session["_source_path"] = str(project_conversations_path)
@@ -1601,7 +1616,7 @@ def sessions_list(ctx: click.Context, limit: int) -> None:
             save_tool_history=config.memory.save_tool_history,
             tool_content_max_length=config.memory.tool_content_max_length,
         )
-        global_sessions = global_manager.list_sessions(limit=limit)
+        global_sessions = global_manager.list_sessions(limit=limit or 10000)
         for session in global_sessions:
             session["_source"] = "global"
             session["_source_path"] = str(global_conversations_path)
@@ -1611,34 +1626,113 @@ def sessions_list(ctx: click.Context, limit: int) -> None:
         console.print("[yellow]No conversation sessions found.[/yellow]")
         return
 
-    # Display sessions in a table
-    from rich.table import Table
+    # Apply limit if specified
+    if limit:
+        all_sessions = all_sessions[:limit]
 
-    table = Table(title="Recent Sessions")
-    table.add_column("Scope", style="magenta", width=8)
-    table.add_column("ID", style="cyan")
-    table.add_column("Title", style="white")
-    table.add_column("Messages", justify="right", style="blue")
-    table.add_column("Last Activity", style="dim")
+    total_sessions = len(all_sessions)
 
-    for session in all_sessions:
-        scope_label = "📁Proj" if session["_source"] == "project" else "🏠User"
-        table.add_row(
-            scope_label,
-            session["id"],
-            session.get("title", "Untitled"),
-            str(session.get("message_count", 0)),
-            session.get("last_activity", "Unknown")[:19],  # Truncate timestamp
+    # Show storage paths info
+    def show_storage_info():
+        if any(s["_source"] == "project" for s in all_sessions):
+            console.print(f"[dim]📁Project: {project_conversations_path}[/dim]")
+        if any(s["_source"] == "global" for s in all_sessions):
+            console.print(f"[dim]🏠User:  {global_conversations_path}[/dim]")
+        console.print()
+
+    # Show a page of sessions
+    def show_page(sessions_page: list, page_num: int, total_pages: int):
+        table = Table(
+            title=f"Recent Sessions (Page {page_num}/{total_pages}, Total: {total_sessions})"
         )
+        table.add_column("Scope", style="magenta", width=8)
+        table.add_column("ID", style="cyan")
+        table.add_column("Title", style="white")
+        table.add_column("Messages", justify="right", style="blue")
+        table.add_column("Last Activity", style="dim")
 
-    console.print(table)
+        for session in sessions_page:
+            scope_label = "📁Proj" if session["_source"] == "project" else "🏠User"
+            table.add_row(
+                scope_label,
+                session["id"],
+                session.get("title", "Untitled"),
+                str(session.get("message_count", 0)),
+                session.get("last_activity", "Unknown")[:19],  # Truncate timestamp
+            )
 
-    # Show storage paths
-    console.print()
-    if any(s["_source"] == "project" for s in all_sessions):
-        console.print(f"[dim]📁Project: {project_conversations_path}[/dim]")
-    if any(s["_source"] == "global" for s in all_sessions):
-        console.print(f"[dim]🏠User:  {global_conversations_path}[/dim]")
+        console.print(table)
+
+    # If no pagination or sessions fit in one page, show all at once
+    if no_pagination or total_sessions <= page_size:
+        show_storage_info()
+        show_page(all_sessions, 1, 1)
+        return
+
+    # Pagination mode
+    show_storage_info()
+
+    current_page = 0
+    total_pages = (total_sessions + page_size - 1) // page_size
+
+    while True:
+        # Calculate page range
+        start_idx = current_page * page_size
+        end_idx = min(start_idx + page_size, total_sessions)
+        page_sessions = all_sessions[start_idx:end_idx]
+
+        # Show current page
+        show_page(page_sessions, current_page + 1, total_pages)
+
+        # Show navigation prompt
+        if current_page < total_pages - 1:
+            console.print(
+                "\n[dim]Options: [n]ext page, [p]revious page, [g]oto page, [q]uit[/dim]"
+            )
+            choice = Prompt.ask(
+                "Your choice", choices=["n", "p", "g", "q"], default="n"
+            ).lower()
+
+            if choice == "n":
+                current_page += 1
+            elif choice == "p":
+                if current_page > 0:
+                    current_page -= 1
+                else:
+                    console.print("[yellow]Already at first page[/yellow]")
+                    continue
+            elif choice == "g":
+                page_input = Prompt.ask(
+                    f"Go to page (1-{total_pages})", default=str(current_page + 1)
+                )
+                try:
+                    target_page = int(page_input)
+                    if 1 <= target_page <= total_pages:
+                        current_page = target_page - 1
+                    else:
+                        console.print(
+                            f"[yellow]Invalid page number. Must be between 1 and {total_pages}[/yellow]"
+                        )
+                        continue
+                except ValueError:
+                    console.print("[yellow]Invalid input. Please enter a number.[/yellow]")
+                    continue
+            elif choice == "q":
+                break
+
+            console.print()  # Add spacing between pages
+        else:
+            # Last page
+            console.print("\n[dim]End of sessions. Press Enter to exit or [p]revious page.[/dim]")
+            choice = Prompt.ask("Your choice", choices=["p", "q", ""], default="").lower()
+            if choice == "p":
+                if current_page > 0:
+                    current_page -= 1
+                    console.print()
+                else:
+                    console.print("[yellow]Already at first page[/yellow]")
+            else:
+                break
 
 
 def _get_conversation_manager_for_session(
