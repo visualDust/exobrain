@@ -65,7 +65,7 @@ class StatusPanel:
             AgentState.STREAMING: ("Streaming", "▶", "green"),
         }
         label, icon, style = state_display.get(self.state, ("Working", "●", "white"))
-        busy = self.state not in (AgentState.IDLE, AgentState.FINISHED, AgentState.ERROR)
+        self.state not in (AgentState.IDLE, AgentState.FINISHED, AgentState.ERROR)
 
         # Build status line
         status_parts = [

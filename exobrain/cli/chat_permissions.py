@@ -1,7 +1,6 @@
 """Permission request and management for ExoBrain CLI."""
 
 import logging
-from pathlib import Path
 from typing import Any
 
 import yaml
@@ -14,9 +13,7 @@ from rich.text import Text
 logger = logging.getLogger(__name__)
 
 
-async def request_permission(
-    denied_info: dict[str, Any], console: Console
-) -> tuple[bool, str]:
+async def request_permission(denied_info: dict[str, Any], console: Console) -> tuple[bool, str]:
     """Request permission from user for a denied action.
 
     Args:
@@ -34,9 +31,7 @@ async def request_permission(
 
     info_table.add_row("Tool", denied_info.get("tool", "unknown"))
     info_table.add_row("Action", denied_info.get("action", "unknown"))
-    info_table.add_row(
-        "Resource", Text(denied_info.get("resource", ""), style="cyan")
-    )
+    info_table.add_row("Resource", Text(denied_info.get("resource", ""), style="cyan"))
     info_table.add_row("Reason", denied_info.get("reason", "unknown"))
 
     # Build panel content using Rich Group for proper rendering
@@ -87,9 +82,7 @@ async def request_permission(
     return True, scope
 
 
-def update_permission(
-    denied_info: dict[str, Any], scope: str, agent: Any, config: Any
-) -> None:
+def update_permission(denied_info: dict[str, Any], scope: str, agent: Any, config: Any) -> None:
     """Update permissions based on scope.
 
     Args:
@@ -116,16 +109,12 @@ def update_permission(
                     resolved_path = Path(resource).expanduser().resolve()
                     if resolved_path not in shell_tool._allowed_directories:
                         shell_tool._allowed_directories.append(resolved_path)
-                        logger.info(
-                            f"Added directory to shell tool ({scope}): {resolved_path}"
-                        )
+                        logger.info(f"Added directory to shell tool ({scope}): {resolved_path}")
                 elif permission_type == "command":
                     # Add to tool's allowed commands
                     if resource not in shell_tool._allowed_commands:
                         shell_tool._allowed_commands.append(resource)
-                        logger.info(
-                            f"Added command to shell tool ({scope}): {resource}"
-                        )
+                        logger.info(f"Added command to shell tool ({scope}): {resource}")
 
         # For session scope, also track in runtime permissions
         if scope == "session":
@@ -150,24 +139,17 @@ def update_permission(
                     config_data["permissions"] = {}
                 if "shell_execution" not in config_data["permissions"]:
                     config_data["permissions"]["shell_execution"] = {}
-                if (
-                    "allowed_commands"
-                    not in config_data["permissions"]["shell_execution"]
-                ):
-                    config_data["permissions"]["shell_execution"][
-                        "allowed_commands"
-                    ] = []
+                if "allowed_commands" not in config_data["permissions"]["shell_execution"]:
+                    config_data["permissions"]["shell_execution"]["allowed_commands"] = []
 
                 # Add command if not already there
                 if (
                     resource
-                    not in config_data["permissions"]["shell_execution"][
-                        "allowed_commands"
-                    ]
+                    not in config_data["permissions"]["shell_execution"]["allowed_commands"]
                 ):
-                    config_data["permissions"]["shell_execution"][
-                        "allowed_commands"
-                    ].append(resource)
+                    config_data["permissions"]["shell_execution"]["allowed_commands"].append(
+                        resource
+                    )
                     logger.info(f"Added command to config: {resource}")
 
             elif permission_type == "path":
@@ -175,24 +157,12 @@ def update_permission(
                     config_data["permissions"] = {}
                 if "file_system" not in config_data["permissions"]:
                     config_data["permissions"]["file_system"] = {}
-                if (
-                    "allowed_paths"
-                    not in config_data["permissions"]["file_system"]
-                ):
-                    config_data["permissions"]["file_system"][
-                        "allowed_paths"
-                    ] = []
+                if "allowed_paths" not in config_data["permissions"]["file_system"]:
+                    config_data["permissions"]["file_system"]["allowed_paths"] = []
 
                 # Add path if not already there
-                if (
-                    resource
-                    not in config_data["permissions"]["file_system"][
-                        "allowed_paths"
-                    ]
-                ):
-                    config_data["permissions"]["file_system"][
-                        "allowed_paths"
-                    ].append(resource)
+                if resource not in config_data["permissions"]["file_system"]["allowed_paths"]:
+                    config_data["permissions"]["file_system"]["allowed_paths"].append(resource)
                     logger.info(f"Added path to config: {resource}")
 
             elif permission_type == "directory":
@@ -200,24 +170,17 @@ def update_permission(
                     config_data["permissions"] = {}
                 if "shell_execution" not in config_data["permissions"]:
                     config_data["permissions"]["shell_execution"] = {}
-                if (
-                    "allowed_directories"
-                    not in config_data["permissions"]["shell_execution"]
-                ):
-                    config_data["permissions"]["shell_execution"][
-                        "allowed_directories"
-                    ] = []
+                if "allowed_directories" not in config_data["permissions"]["shell_execution"]:
+                    config_data["permissions"]["shell_execution"]["allowed_directories"] = []
 
                 # Add directory if not already there
                 if (
                     resource
-                    not in config_data["permissions"]["shell_execution"][
-                        "allowed_directories"
-                    ]
+                    not in config_data["permissions"]["shell_execution"]["allowed_directories"]
                 ):
-                    config_data["permissions"]["shell_execution"][
-                        "allowed_directories"
-                    ].append(resource)
+                    config_data["permissions"]["shell_execution"]["allowed_directories"].append(
+                        resource
+                    )
                     logger.info(f"Added directory to config: {resource}")
 
             # Save config
