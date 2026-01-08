@@ -384,7 +384,7 @@ def create_default_config(output_path: str | Path) -> None:
                     "api_key": "${OPENAI_API_KEY}",
                     "base_url": "https://api.openai.com/v1",
                     "models": ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"],
-                    "default_params": {"temperature": 0.7, "max_tokens": 4096},
+                    "default_params": {"temperature": 0.7},
                 }
             },
             "embedding": {

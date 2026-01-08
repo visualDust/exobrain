@@ -118,7 +118,7 @@ class ModelFactory:
                 default_params=config.default_params,
             )
 
-        elif provider_name == "local" or provider_name == "ollama" or provider_name == "custom":
+        elif provider_name == "local" or provider_name == "ollama":
             if not config.base_url:
                 raise ValueError(f"{provider_name} requires base_url configuration")
             return LocalModelProvider(
@@ -129,7 +129,18 @@ class ModelFactory:
             )
 
         else:
-            raise ValueError(f"Unknown provider type: {provider_name}")
+            # Treat all other providers as OpenAI-compatible APIs
+            # This allows users to add custom third-party providers
+            if not config.api_key:
+                raise ValueError(f"{provider_name} API key is required")
+            if not config.base_url:
+                raise ValueError(f"{provider_name} requires base_url configuration")
+            return OpenAIProvider(
+                api_key=config.api_key,
+                base_url=config.base_url,
+                model=model_name,
+                default_params=config.default_params,
+            )
 
     def list_available_models(self) -> list[str]:
         """List all available model specifications.
