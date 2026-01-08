@@ -281,6 +281,7 @@ def create_agent_from_config(
 
     # Load skills if enabled
     skills_manager = None
+    skills_summary = ""
 
     if enable_skills and getattr(config.skills, "enabled", True):
         from exobrain.skills.loader import load_default_skills
@@ -332,7 +333,7 @@ def create_agent_from_config(
     import json
 
     constitution_chars = len(constitution_content) if constitution_content else 0
-    skills_chars = len(skills_summary) if skills_manager and skills_summary else 0
+    skills_chars = len(skills_summary) if skills_summary else 0
 
     # Calculate tools schema size (JSON representation)
     tools_schemas = []
