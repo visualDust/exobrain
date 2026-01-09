@@ -934,6 +934,10 @@ async def run_tui_chat_session(
 @click.option("--no-stream", is_flag=True, help="Disable streaming")
 @click.option("--no-skills", is_flag=True, help="Disable skills")
 @click.option(
+    "--constitution",
+    help="Constitution file to use (overrides config)",
+)
+@click.option(
     "-c",
     "--continue",
     "continue_session",
@@ -975,6 +979,7 @@ def chat(
     model: str | None,
     no_stream: bool,
     no_skills: bool,
+    constitution: str | None,
     continue_session: bool,
     session_id: str | None,
     new_session: bool,
@@ -1002,7 +1007,9 @@ def chat(
 
     try:
         # Create agent
-        agent, skills_manager = create_agent_from_config(config, model, enable_skills=not no_skills)
+        agent, skills_manager = create_agent_from_config(
+            config, model, enable_skills=not no_skills, constitution_file=constitution
+        )
 
         # Validate storage options
         if use_project and use_global:
@@ -1037,6 +1044,10 @@ def chat(
     help="Model to use (e.g., openai/gpt-4o, gemini/gemini-pro, local/Qwen3-30B)",
 )
 @click.option("--no-skills", is_flag=True, help="Disable skills")
+@click.option(
+    "--constitution",
+    help="Constitution file to use (overrides config)",
+)
 @click.option("--verbose", "-v", is_flag=True, help="Show detailed tool execution info")
 @click.pass_context
 def ask(
@@ -1044,6 +1055,7 @@ def ask(
     query: str,
     model: str | None,
     no_skills: bool,
+    constitution: str | None,
     verbose: bool,
 ) -> None:
     """Ask a single question.
@@ -1057,7 +1069,9 @@ def ask(
 
     try:
         # Create agent
-        agent, skills_manager = create_agent_from_config(config, model, enable_skills=not no_skills)
+        agent, skills_manager = create_agent_from_config(
+            config, model, enable_skills=not no_skills, constitution_file=constitution
+        )
 
         # Set verbose mode if requested
         agent.verbose = verbose

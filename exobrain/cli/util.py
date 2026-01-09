@@ -24,7 +24,10 @@ logger = logging.getLogger(__name__)
 
 
 def create_agent_from_config(
-    config: Config, model_spec: str | None = None, enable_skills: bool = True
+    config: Config,
+    model_spec: str | None = None,
+    enable_skills: bool = True,
+    constitution_file: str | None = None,
 ) -> tuple[Agent, Any]:  # Returns (agent, skills_manager)
     """Create an agent from configuration.
 
@@ -32,6 +35,7 @@ def create_agent_from_config(
         config: Application configuration
         model_spec: Optional model specification (overrides config default)
         enable_skills: Whether to enable skills (default: True)
+        constitution_file: Optional constitution file path (overrides config)
 
     Returns:
         Tuple of (Configured Agent instance, Skills manager)
@@ -139,7 +143,9 @@ def create_agent_from_config(
         )
 
     # Load constitution document (defaults to builtin-default if not specified)
-    constitution_file = getattr(config.agent, "constitution_file", None)
+    # Use passed constitution_file parameter if provided, otherwise use config
+    if constitution_file is None:
+        constitution_file = getattr(config.agent, "constitution_file", None)
     constitution_content = load_constitution(constitution_file)
 
     # Build system prompt with constitution

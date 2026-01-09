@@ -46,7 +46,7 @@ class LocalModelProvider(OpenAIProvider):
 
     def supports_tool_calling(self) -> bool:
         """Tool calling support depends on the local model."""
-        # Some models support it, but we'll default to False
+        # Some models support it, default to False
         # This can be configured per model
         return True
 
