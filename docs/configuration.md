@@ -24,7 +24,7 @@ ExoBrain supports multiple configuration file locations with a priority hierarch
 ### 1. Version
 
 ```yaml
-version: "0.1.1"
+version: "0.1.2"
 ```
 
 The ExoBrain version. This is auto-updated during `exobrain config init`.
