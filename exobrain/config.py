@@ -17,8 +17,48 @@ class ModelProviderConfig(BaseModel):
 
     api_key: str | None = None
     base_url: str | None = None
-    models: list[str] = []
-    default_params: dict[str, Any] = Field(default_factory=dict)
+    models: list[
+        str | dict[str, Any]
+    ] = []  # Can be str or dict with name/description/default_params
+    default_params: dict[str, Any] = Field(
+        default_factory=dict
+    )  # Provider-level default (legacy support)
+
+    def get_model_list(self) -> list[str]:
+        """Get list of model names (extracts names from both string and dict formats)."""
+        result = []
+        for item in self.models:
+            if isinstance(item, str):
+                result.append(item)
+            elif isinstance(item, dict) and "name" in item:
+                result.append(item["name"])
+        return result
+
+    def get_model_description(self, model_name: str) -> str:
+        """Get description for a specific model."""
+        for item in self.models:
+            if isinstance(item, str) and item == model_name:
+                return ""
+            elif isinstance(item, dict) and item.get("name") == model_name:
+                return item.get("description", "")
+        return ""
+
+    def get_model_default_params(self, model_name: str) -> dict[str, Any]:
+        """Get default parameters for a specific model.
+
+        Falls back to provider-level default_params if not specified at model level.
+        """
+        # Check model-level default_params first
+        for item in self.models:
+            if isinstance(item, dict) and item.get("name") == model_name:
+                model_params = item.get("default_params", {})
+                if model_params:
+                    return model_params
+                # If model exists but has no params, fall through to provider default
+                break
+
+        # Fall back to provider-level default_params (for backwards compatibility)
+        return self.default_params
 
 
 class ModelsConfig(BaseModel):

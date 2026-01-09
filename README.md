@@ -124,8 +124,8 @@ exobrain sessions delete --all --yes
 ### Skills System
 
 ```bash
-# List available skills
-exobrain skills list
+# Manage available skills in TUI
+exobrain skills
 
 # Search skills
 exobrain skills list --search "pdf"

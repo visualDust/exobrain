@@ -41,15 +41,15 @@ class ModelFactory:
         else:
             # First, try to find a provider with this name
             provider_config = self.config.models.providers.get(model_spec)
-            if provider_config and provider_config.models:
+            if provider_config and provider_config.get_model_list():
                 # It's a provider name, use first model
                 provider_name = model_spec
-                model_name = provider_config.models[0]
+                model_name = provider_config.get_model_list()[0]
             else:
                 # Search for the model name across all providers
                 found_provider = None
                 for pname, pconfig in self.config.models.providers.items():
-                    if model_spec in pconfig.models:
+                    if model_spec in pconfig.get_model_list():
                         found_provider = pname
                         break
 
@@ -97,6 +97,9 @@ class ModelFactory:
         Raises:
             ValueError: If provider type is unknown
         """
+        # Get model-specific default params (with fallback to provider-level)
+        default_params = config.get_model_default_params(model_name)
+
         if provider_name == "openai":
             if not config.api_key:
                 raise ValueError("OpenAI API key is required")
@@ -104,7 +107,7 @@ class ModelFactory:
                 api_key=config.api_key,
                 base_url=config.base_url or "https://api.openai.com/v1",
                 model=model_name,
-                default_params=config.default_params,
+                default_params=default_params,
             )
 
         elif provider_name == "gemini":
@@ -114,7 +117,7 @@ class ModelFactory:
                 api_key=config.api_key,
                 model=model_name,
                 base_url=config.base_url or "https://generativelanguage.googleapis.com/v1beta",
-                default_params=config.default_params,
+                default_params=default_params,
             )
 
         elif provider_name == "local" or provider_name == "ollama":
@@ -124,7 +127,7 @@ class ModelFactory:
                 base_url=config.base_url,
                 model=model_name,
                 api_key=config.api_key or "dummy",
-                default_params=config.default_params,
+                default_params=default_params,
             )
 
         else:
@@ -138,7 +141,7 @@ class ModelFactory:
                 api_key=config.api_key,
                 base_url=config.base_url,
                 model=model_name,
-                default_params=config.default_params,
+                default_params=default_params,
             )
 
     def list_available_models(self) -> list[str]:
@@ -149,6 +152,6 @@ class ModelFactory:
         """
         models = []
         for provider_name, provider_config in self.config.models.providers.items():
-            for model_name in provider_config.models:
+            for model_name in provider_config.get_model_list():
                 models.append(f"{provider_name}/{model_name}")
         return models

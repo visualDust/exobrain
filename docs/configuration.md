@@ -1,492 +1,491 @@
-# Configuration File Structure
+# Configuration Guide
 
-ExoBrain uses YAML configuration files to customize behavior, model providers, tools, permissions, and more. This document provides a comprehensive guide to the configuration structure.
+ExoBrain uses YAML configuration files to manage settings. This guide covers the configuration structure, loading mechanism, and available options.
 
-## Configuration File Locations
+## Configuration Loading
 
-ExoBrain supports multiple configuration file locations with a priority hierarchy:
+### File Locations
 
-1. **Default config (builtin)** - Hard-coded defaults in the application
-2. **User global config** - `~/.config/exobrain/config.yaml` or `~/.exobrain/config.yaml`
-3. **Project-level config** - `./.exobrain/config.yaml` (highest priority)
+ExoBrain searches for configuration files in the following locations (in order of priority):
 
-### Configuration Loading
+1. **User global config** - `~/.config/exobrain/config.yaml` (Linux/macOS) or `%LOCALAPPDATA%\exobrain\config.yaml` (Windows)
+2. **Project-level config** - `./.exobrain/config.yaml` (highest priority)
 
-- Configurations are loaded sequentially and **deep merged**
-- Each layer only needs to specify overrides (partial configuration)
-- Nested dictionaries are merged recursively (not replaced entirely)
-- Primitive values (strings, numbers, booleans) are replaced
-- Environment variables are expanded after merging (e.g., `${OPENAI_API_KEY}`)
-- The final merged configuration is validated against the Pydantic schema
+### Loading Mechanism
 
-## Configuration Sections
+1. **Hierarchical Loading**: Configuration files are loaded sequentially and merged
+2. **Deep Merge**: Nested dictionaries are recursively merged (not replaced)
+   - Lists are replaced (not merged)
+   - Primitive values (strings, numbers, booleans) are replaced
+3. **Environment Variable Expansion**: Applied after merging using `${VAR_NAME}` syntax
+4. **Validation**: Final merged configuration is validated against Pydantic schema
 
-### 1. Version
+**Example of Deep Merge:**
+
+User config (`~/.config/exobrain/config.yaml`):
 
 ```yaml
-version: "0.1.2"
+models:
+  providers:
+    openai:
+      models: [gpt-4o, gpt-4o-mini]
 ```
 
-The ExoBrain version. This is auto-updated during `exobrain config init`.
+Project config (`./.exobrain/config.yaml`):
 
-### 2. Models
+```yaml
+models:
+  default: openai/gpt-4o # Override default
+  providers:
+    gemini: # Add new provider
+      models: [gemini-2.0-flash]
+```
+
+Result: Both providers exist, with `default` set to `openai/gpt-4o`.
+
+### Platform-Specific Paths
+
+**Linux/macOS:**
+
+- User config: `$XDG_CONFIG_HOME/exobrain/config.yaml` or `~/.config/exobrain/config.yaml`
+- Home expansion: `~` is expanded to user home directory
+
+**Windows:**
+
+- User config: `%LOCALAPPDATA%\exobrain\config.yaml` or `%APPDATA%\exobrain\config.yaml`
+
+## Configuration Structure
+
+### Root Schema
+
+```yaml
+version: "0.1.2" # Config version (should match package version)
+models: { ... } # Model providers and settings
+agent: { ... } # Agent behavior configuration
+tools: { ... } # Tool enablement flags
+permissions: { ... } # Fine-grained permissions
+skills: { ... } # Skill loading configuration
+mcp: { ... } # MCP server configuration
+memory: { ... } # Conversation memory settings
+cli: { ... } # CLI appearance and behavior
+logging: { ... } # Logging configuration
+```
+
+### models
 
 Configure model providers and select the default model.
 
 ```yaml
 models:
-  default: openai/gpt-5-mini # Format: provider/model
-  providers:
+  default: "openai/gpt-4o-mini" # Required: format is "provider/model"
+
+  providers: # Required: at least one provider
     openai:
-      api_key: ${OPENAI_API_KEY} # Environment variable
-      base_url: https://api.openai.com/v1
+      api_key: "${OPENAI_API_KEY}" # Optional: API key (use env vars)
+      base_url: "https://api.openai.com/v1" # Optional: API endpoint
+
+      # Models can be defined in two formats:
       models:
-        - gpt-5-pro
-        - gpt-5
-        - gpt-5-mini
-        - gpt-5-nano
-        - gpt-4
-        - gpt-4o
+        # 1. Simple format (string)
         - gpt-4o-mini
         - gpt-3.5-turbo
+
+        # 2. Extended format (object)
+        - name: gpt-4o
+          description: "Most capable model" # Optional: shown in 'models list'
+          default_params: # Optional: model-specific defaults
+            temperature: 0.7
+            max_tokens: 4096
+
+      # Provider-level defaults (legacy support, applies to models without their own defaults)
       default_params:
         temperature: 0.7
-        # max_tokens: 4096  # Optional
-```
 
-#### Adding Third-Party Providers
-
-You can add any OpenAI-compatible API provider:
-
-```yaml
-models:
-  providers:
-    custom-provider:
-      api_key: ${CUSTOM_API_KEY}
-      base_url: https://api.custom-provider.com/v1
+    local: # Example: local model hosted via vLLM
+      base_url: http://localhost:8000/v1
       models:
-        - custom-model-1
-        - custom-model-2
-      default_params:
-        temperature: 0.7
+        - Qwen/Qwen3-30B-A3B-Instruct-2507-FP8
+        - Qwen/QwQ-32B
 ```
 
-**CLI Command:**
+### agent
 
-```bash
-exobrain models add  # Interactive wizard for adding providers
-exobrain models list # List available models
-exobrain models use provider/model  # Set default model
-```
-
-#### Supported Providers
-
-- **openai** - OpenAI API (gpt-4, gpt-5, etc.)
-- **gemini** - Google Gemini API
-- **local** - Local models via OpenAI-compatible server (vLLM, Ollama, etc.)
-- **custom** - Any OpenAI-compatible API
-
-### 3. Agent
-
-Configure the AI agent's behavior and personality.
+Configure the AI agent's behavior.
 
 ```yaml
 agent:
-  system_prompt: "You are ExoBrain, a personal AI assistant focused on productivity."
-  constitution_file: # Options: builtin-default, builtin-coding, or path to custom .md file
-  max_iterations: 500 # Max autonomous iterations. Use -1 for unlimited
-  stream: true # Enable streaming responses
-  temperature: 0.7 # Optional: override provider default
+  system_prompt: "You are ExoBrain, a helpful AI assistant." # Required
+  constitution_file: null # Optional: path to constitution file or builtin name
+  max_iterations: 500 # Optional: max autonomous iterations (-1 for unlimited)
+  stream: true # Optional: enable streaming responses
 ```
 
-#### Constitution Files
+**Constitution Files:**
 
-Constitution files define the agent's personality and behavioral guidelines:
-
-- `builtin-default` - General-purpose assistant (default)
+- `null` - No constitution
+- `builtin-default` - General-purpose assistant
 - `builtin-coding` - Coding-focused assistant
-- Custom path - Path to your own constitution markdown file
-  - Absolute: `/path/to/constitution.md`
-  - Relative to project: `.exobrain/constitutions/custom.md`
-  - Relative to user: `~/.exobrain/constitutions/custom.md`
+- Custom path: `/path/to/constitution.md` or `~/.exobrain/constitutions/custom.md`
 
-**Example:**
+### tools
 
-```yaml
-agent:
-  constitution_file: builtin-coding
-```
-
-### 4. Tools
-
-Enable or disable tool categories.
+Enable or disable tool categories (boolean flags).
 
 ```yaml
 tools:
-  file_system: true # File read/write/search
-  web_access: true # Web search and fetch
-  location: true # Get user location
-  code_execution: true # Execute Python code
-  shell_execution: true # Execute shell commands
-  time_management: true # Time and timezone tools
+  file_system: true # Default: true
+  web_access: false # Default: false
+  location: false # Default: false
+  code_execution: false # Default: false
+  shell_execution: false # Default: false
+  time_management: true # Default: true
 ```
 
-### 5. Permissions
+### permissions
 
-Fine-grained permissions for each tool category.
-
-#### File System Permissions
+Fine-grained permissions for each tool category (dict per tool).
 
 ```yaml
 permissions:
   file_system:
     enabled: true
-    allowed_paths: [] # Empty = all paths allowed
-    denied_paths: # Blacklist specific paths
-      - ~/.ssh
-      - ~/.aws
-      - ~/.config
-      - ~/.*credentials*
-    max_file_size: 10485760 # 10MB in bytes
+    allowed_paths: [] # Empty list = all paths (use with caution)
+    denied_paths: # Takes precedence over allowed_paths
+      - "~/.ssh"
+      - "~/.aws"
+      - "~/.config"
+    max_file_size: 10485760 # Bytes (10MB)
     allow_edit: false # Allow file modifications
-```
 
-**Security Notes:**
-
-- `allowed_paths: []` means no restrictions (use with caution)
-- `denied_paths` takes precedence over `allowed_paths`
-- Glob patterns are supported (e.g., `~/.*credentials*`)
-
-#### Shell Execution Permissions
-
-```yaml
-permissions:
-  shell_execution:
-    enabled: true
-    timeout: 30 # seconds
-    allowed_directories:
-      - ~/repos
-      - ~/Documents
-      - ~/Desktop
-    denied_directories:
-      - ~/.ssh
-      - ~/.aws
-      - /etc
-      - /sys
-      - /proc
-    allowed_commands:
-      - ls
-      - ls *
-      - pwd
-      - git *
-      - python *
-      - npm *
-      # ... (see config.example.yaml for full list)
-    denied_commands:
-      - rm -rf /
-      - sudo *
-      - shutdown *
-      # ... (see config.example.yaml for full list)
-```
-
-**Command Matching:**
-
-- Exact match: `ls` only matches `ls`
-- Wildcard: `git *` matches `git status`, `git commit`, etc.
-- Denied commands take precedence over allowed commands
-
-#### Code Execution Permissions
-
-```yaml
-permissions:
   code_execution:
-    enabled: true
-    timeout: 30 # seconds
-    memory_limit: 512MB
+    enabled: false
+    timeout: 30 # Seconds
+    memory_limit: "512MB"
     network_access: true
-```
 
-#### Web Access Permissions
+  shell_execution:
+    enabled: false
+    timeout: 600 # Seconds (10 minutes)
+    allowed_directories:
+      - "~/repos"
+      - "~/Documents"
+    denied_directories: # Takes precedence over allowed
+      - "~/.ssh"
+      - "/etc"
+      - "/sys"
+    allowed_commands: # Wildcard supported: "git *" matches all git commands
+      - "ls"
+      - "ls *"
+      - "git *"
+      - "python *"
+    denied_commands: # Takes precedence over allowed
+      - "rm -rf /"
+      - "sudo *"
 
-```yaml
-permissions:
   web_access:
-    enabled: true
-    max_results: 5 # Max search results
-    max_content_length: 10000 # Max fetched content length (chars)
-```
+    enabled: false
+    max_results: 5
+    max_content_length: 10000 # Characters
 
-#### Location Permissions
-
-```yaml
-permissions:
   location:
-    enabled: true
-    provider_url: https://ipinfo.io/json
-    timeout: 10
-    # token: <OPTIONAL_TOKEN>  # For premium providers
+    enabled: false
+    provider_url: "https://ipinfo.io/json"
+    timeout: 10 # Seconds
 ```
 
-### 6. Skills
+### skills
 
 Configure skill loading and management.
 
 ```yaml
 skills:
-  enabled: true
-  skills_dir: ~/.exobrain/skills # Custom skills directory
-  auto_load: true # Auto-load skills from skills_dir
+  enabled: true # Default: true
+  skills_dir: "~/.exobrain/skills" # Default: "~/.exobrain/skills"
+  auto_load: true # Default: true
+  disabled_skills: [] # List of skill names to disable
 ```
 
-**Skill Locations:**
+**Skill Loading Order:**
 
 1. Builtin skills (packaged with ExoBrain)
 2. User skills (`~/.exobrain/skills/`)
 3. Project skills (`./.exobrain/skills/`)
 
-**CLI Commands:**
+### mcp
 
-```bash
-exobrain skills list           # List all available skills
-exobrain skills show <name>    # Show skill details
-exobrain skills list --search <term>  # Search skills
-```
-
-### 7. MCP (Model Context Protocol)
-
-Configure MCP servers for extended capabilities.
+Configure MCP (Model Context Protocol) servers.
 
 ```yaml
 mcp:
-  enabled: true
-  servers: [] # Custom MCP servers
+  enabled: false # Default: false
+  servers: [] # List of custom MCP server configurations
+
+  # Context7 integration (optional)
   context7:
-    enabled: true
-    api_key: ${CONTEXT7_API_KEY}
-    endpoint: https://api.context7.com/v1/search
+    enabled: false
+    api_key: "${CONTEXT7_API_KEY}"
+    endpoint: "https://api.context7.com/v1/search"
     max_results: 5
     timeout: 20
 ```
 
-#### Adding Custom MCP Servers
+**Custom MCP Server Example:**
 
 ```yaml
 mcp:
   servers:
-    - name: my-mcp-server
+    - name: my-server
       enabled: true
-      transport: stdio # or http
+      transport: stdio # or "http"
       command: python
       args:
         - -m
         - my_mcp_server
       env:
-        API_KEY: ${MY_MCP_API_KEY}
+        API_KEY: "${MY_API_KEY}"
 ```
 
-**CLI Commands:**
+### memory
 
-```bash
-exobrain mcp list              # List MCP servers
-exobrain mcp enable <name>     # Enable a server
-exobrain mcp disable <name>    # Disable a server
-```
-
-### 8. Memory
-
-Configure conversation history and memory management.
+Configure conversation memory and history.
 
 ```yaml
 memory:
   short_term:
-    max_messages: 50
-    summarize_threshold: 40
+    max_messages: 50 # Max messages in active conversation
+    summarize_threshold: 40 # Trigger summarization at this count
+
   long_term:
     enabled: true
-    storage_path: ~/.exobrain/data/conversations
+    storage_path: "~/.exobrain/data/conversations"
+
   working:
-    max_items: 20
-  save_tool_history: true # Save tool execution results
-  tool_content_max_length: 1000 # Max tool message length (chars)
+    max_items: 20 # Max items in working memory during execution
+
+  save_tool_history: true # Save tool execution results to session
+  tool_content_max_length: 1000 # Max length of tool message content (chars)
 ```
 
-**Memory Types:**
+### cli
 
-- **Short-term** - Recent messages in active conversation
-- **Long-term** - Persistent conversation storage
-- **Working** - Current context items during agent execution
-
-**Tool History:**
-
-- `save_tool_history: true` - Save tool execution results to session
-- `tool_content_max_length` - Limit tool message size to prevent bloat
-  - Set to 500-1000 for compact storage
-  - Set to 5000+ for detailed debugging
-
-### 9. CLI
-
-Configure CLI behavior and appearance.
+Configure CLI appearance and behavior.
 
 ```yaml
 cli:
-  theme: auto # auto, light, dark
-  show_token_usage: true
-  render_markdown: true # Render assistant responses as markdown
+  theme: "auto" # Options: "auto", "light", "dark"
+  show_token_usage: true # Show token usage after responses
+  render_markdown: true # Render markdown in responses
 ```
 
-### 10. Logging
+### logging
 
 Configure logging behavior.
 
 ```yaml
 logging:
-  level: INFO # DEBUG, INFO, WARNING, ERROR, CRITICAL
-  file: ~/.exobrain/logs/exobrain.log
-  rotate: true
-  max_size: 10485760 # 10MB
+  level: "INFO" # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  file: "~/.exobrain/logs/exobrain.log"
+  rotate: true # Enable log rotation
+  max_size: 10485760 # Max log file size in bytes (10MB)
   format: "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"
 ```
 
-**Log Levels:**
-
-- `DEBUG` - Detailed information for diagnosing problems
-- `INFO` - General informational messages (default)
-- `WARNING` - Warning messages
-- `ERROR` - Error messages
-- `CRITICAL` - Critical error messages
-
 ## Environment Variables
 
-ExoBrain supports environment variable expansion in configuration values using the `${VAR_NAME}` syntax.
+### Variable Expansion
+
+ExoBrain expands environment variables using `${VAR_NAME}` syntax:
+
+```yaml
+models:
+  providers:
+    openai:
+      api_key: "${OPENAI_API_KEY}" # Expanded to value of $OPENAI_API_KEY
+```
+
+### Home Directory Expansion
+
+Paths starting with `~` are expanded to the user's home directory:
+
+```yaml
+skills:
+  skills_dir: "~/.exobrain/skills" # Expanded to /home/user/.exobrain/skills
+```
 
 ### Common Environment Variables
 
 ```bash
-# Model Provider API Keys
+# Model providers
 export OPENAI_API_KEY="sk-..."
 export GOOGLE_API_KEY="..."
 export ANTHROPIC_API_KEY="..."
 
-# MCP Services
+# MCP services
 export CONTEXT7_API_KEY="..."
-
-# Custom Providers
-export CUSTOM_API_KEY="..."
 ```
 
-### Setting Environment Variables
+**Setting Environment Variables:**
 
-**Linux/macOS (bash/zsh):**
+Linux/macOS:
 
 ```bash
 # Add to ~/.bashrc or ~/.zshrc
 export OPENAI_API_KEY="sk-..."
-
-# Or create a .env file and load it
-echo 'export OPENAI_API_KEY="sk-..."' >> ~/.exobrain/.env
-source ~/.exobrain/.env
 ```
 
-**Windows (PowerShell):**
+Windows PowerShell:
 
 ```powershell
-# Add to PowerShell profile
-$env:OPENAI_API_KEY = "sk-..."
-
-# Or set permanently
+# Set permanently
 [System.Environment]::SetEnvironmentVariable("OPENAI_API_KEY", "sk-...", "User")
 ```
 
-## Configuration Management
+## CLI Commands
 
-### Initialize Configuration
-
-```bash
-exobrain config init  # Interactive wizard
-exobrain config init --wizard  # Force wizard mode
-```
-
-### View Configuration
+### Configuration Management
 
 ```bash
-exobrain config show      # Show current settings
-exobrain config list      # List all config locations
-exobrain config show-path # Show primary config path
+# Initialize configuration
+exobrain config init              # Interactive wizard
+exobrain config init --wizard     # Force wizard mode
+
+# View configuration
+exobrain config show              # Show merged configuration
+exobrain config list              # List all config file locations
+exobrain config show-path         # Show primary config path
 exobrain config get models.default  # Get specific value
+
+# Edit configuration
+exobrain config edit              # Open in default editor
+exobrain config edit --editor vim # Specify editor
+
+# Reset configuration
+exobrain config reset             # Reset to defaults (with confirmation)
+exobrain config reset --yes       # Skip confirmation
 ```
 
-### Edit Configuration
+### Model Management
 
 ```bash
-exobrain config edit      # Open in default editor
-exobrain config edit --editor vim  # Specify editor
+# List available models
+exobrain models list              # Shows models with descriptions
+
+# Add provider/models
+exobrain models add               # Interactive wizard
+                                  # - Add new provider
+                                  # - Add models to existing provider
+                                  # - Set descriptions and default params
+
+# Set default model
+exobrain models use openai/gpt-4o
+exobrain models use               # Interactive selection
 ```
 
-### Reset Configuration
+### Skill Management
 
 ```bash
-exobrain config reset     # Reset to defaults (with confirmation)
-exobrain config reset --yes  # Skip confirmation
+# List skills
+exobrain skills list              # List all available skills
+exobrain skills list --search term  # Search skills
+
+# Show skill details
+exobrain skills show <skill-name>
+
+# Enable/disable skills
+exobrain skills enable <skill-name>
+exobrain skills disable <skill-name>
 ```
 
-## Example Configurations
+### MCP Management
+
+```bash
+# List MCP servers
+exobrain mcp list
+
+# Enable/disable MCP servers
+exobrain mcp enable <server-name>
+exobrain mcp disable <server-name>
+```
+
+## Configuration Examples
 
 ### Minimal Configuration
 
-For a minimal setup with only essential settings:
-
 ```yaml
 models:
-  default: openai/gpt-5-mini
+  default: "openai/gpt-4o-mini"
   providers:
     openai:
-      api_key: ${OPENAI_API_KEY}
+      api_key: "${OPENAI_API_KEY}"
 ```
 
 ### Secure Configuration
 
-For maximum security with restricted permissions:
+Restrictive permissions for maximum security:
 
 ```yaml
 models:
-  default: openai/gpt-4o
+  default: "openai/gpt-4o"
+  providers:
+    openai:
+      api_key: "${OPENAI_API_KEY}"
 
 agent:
-  constitution_file: builtin-default
+  system_prompt: "You are a helpful AI assistant."
+  max_iterations: 500
 
 tools:
   file_system: true
-  shell_execution: false # Disable shell
-  code_execution: false # Disable code execution
   web_access: true
+  shell_execution: false # Disabled
+  code_execution: false # Disabled
 
 permissions:
   file_system:
     enabled: true
     allowed_paths:
-      - ~/Documents/allowed_project
+      - "~/Documents/safe-project"
     denied_paths:
-      - ~/.ssh
-      - ~/.aws
-      - ~/.config
+      - "~/.ssh"
+      - "~/.aws"
+      - "~/.config"
     max_file_size: 1048576 # 1MB
-    allow_edit: false
+    allow_edit: false # Read-only
+
+  web_access:
+    enabled: true
+    max_content_length: 5000
 
 memory:
   save_tool_history: true
-  tool_content_max_length: 500 # Compact storage
+  tool_content_max_length: 500
+
+logging:
+  level: "INFO"
 ```
 
 ### Developer Configuration
 
-For software development with full tool access:
+Full tool access for development:
 
 ```yaml
 models:
-  default: openai/gpt-5
+  default: "openai/gpt-4o"
+  providers:
+    openai:
+      api_key: "${OPENAI_API_KEY}"
+      models:
+        - name: gpt-4o
+          description: "Best for complex tasks"
+          default_params:
+            temperature: 0.7
+        - name: gpt-4o-mini
+          description: "Fast for simple tasks"
+          default_params:
+            temperature: 0.5
 
 agent:
-  constitution_file: builtin-coding
+  constitution_file: "builtin-coding"
   max_iterations: 1000
   stream: true
 
@@ -504,50 +503,97 @@ permissions:
 
   shell_execution:
     enabled: true
+    timeout: 600
     allowed_directories:
-      - ~/repos
-      - ~/projects
+      - "~/repos"
+      - "~/projects"
     allowed_commands:
       - "*" # All commands (use with caution)
     denied_commands:
-      - rm -rf /
-      - sudo rm *
+      - "rm -rf /"
+      - "sudo rm *"
+
+  code_execution:
+    enabled: true
+    timeout: 30
+    network_access: true
 
 memory:
   save_tool_history: true
   tool_content_max_length: 2000
 
 logging:
-  level: DEBUG # Detailed logs for development
+  level: "DEBUG"
 ```
 
 ### Project-Level Override
 
-`.exobrain/config.yaml` in your project:
+`.exobrain/config.yaml` in your project (merged with user config):
 
 ```yaml
-# Only override what's different for this project
+# Override only what's different for this project
 models:
-  default: gemini/gemini-2.5-flash # Use faster model for this project
+  default: "gemini/gemini-2.0-flash" # Use faster model for this project
 
 agent:
-  constitution_file: .exobrain/constitutions/project-assistant.md
+  constitution_file: ".exobrain/constitutions/project-assistant.md"
   max_iterations: 200
 
 permissions:
   file_system:
     allowed_paths:
-      - . # Only this project directory
+      - "." # Only this project directory
 ```
 
-## Validation and Troubleshooting
+### Multi-Model Configuration
+
+Configure multiple providers with different models:
+
+```yaml
+models:
+  default: "openai/gpt-4o"
+
+  providers:
+    openai:
+      api_key: "${OPENAI_API_KEY}"
+      base_url: "https://api.openai.com/v1"
+      models:
+        - name: gpt-4o
+          description: "Most capable"
+          default_params:
+            temperature: 0.7
+        - name: gpt-4o-mini
+          description: "Fast and cheap"
+          default_params:
+            temperature: 0.5
+            max_tokens: 2000
+
+    gemini:
+      api_key: "${GOOGLE_API_KEY}"
+      base_url: "https://generativelanguage.googleapis.com/v1beta"
+      models:
+        - name: gemini-2.0-flash
+          description: "Very fast responses"
+          default_params:
+            temperature: 0.3
+
+    local:
+      base_url: "http://localhost:8000/v1"
+      models:
+        - name: llama-3.1-70b
+          description: "Local model"
+          default_params:
+            temperature: 0.8
+```
+
+## Troubleshooting
 
 ### Configuration Validation
 
 ExoBrain validates configuration on load:
 
 ```bash
-exobrain config show  # Will show validation errors if any
+exobrain config show  # Shows validation errors if any
 ```
 
 ### Common Issues
@@ -555,15 +601,15 @@ exobrain config show  # Will show validation errors if any
 **Issue: "Configuration file not found"**
 
 ```bash
-# Solution: Initialize configuration
 exobrain config init
 ```
 
 **Issue: "Invalid API key"**
 
 ```bash
-# Solution: Check environment variable
+# Check environment variable
 echo $OPENAI_API_KEY
+
 # Set if not defined
 export OPENAI_API_KEY="sk-..."
 ```
@@ -571,25 +617,53 @@ export OPENAI_API_KEY="sk-..."
 **Issue: "Permission denied"**
 
 ```bash
-# Solution: Check file_system permissions in config
+# Check permissions in config
 exobrain config get permissions.file_system.allowed_paths
 ```
 
 **Issue: "Model not found"**
 
 ```bash
-# Solution: List available models
+# List available models
 exobrain models list
+
 # Check provider configuration
 exobrain config get models.providers
 ```
 
-### Debug Mode
+**Issue: "Version mismatch"**
 
-Enable verbose logging for troubleshooting:
+If config version doesn't match package version, backup and regenerate:
 
 ```bash
-exobrain --verbose chat           # Enable verbose output
-exobrain config get logging.level # Check log level
-exobrain config edit              # Set level: DEBUG
+cp ~/.config/exobrain/config.yaml ~/.config/exobrain/config.yaml.backup
+exobrain config init
+```
+
+### Debug Mode
+
+Enable verbose logging:
+
+```bash
+# Temporary (CLI flag)
+exobrain --verbose chat
+
+# Permanent (config)
+exobrain config edit
+# Set: logging.level: DEBUG
+```
+
+## Version Compatibility
+
+The `version` field in your config should match the ExoBrain package version. If there's a mismatch, ExoBrain will error and prompt you to regenerate the config.
+
+```yaml
+version: "0.1.2" # Should match `exobrain --version`
+```
+
+To check compatibility:
+
+```bash
+exobrain --version           # Check package version
+exobrain config show | head  # Check config version
 ```
