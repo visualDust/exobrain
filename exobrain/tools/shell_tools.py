@@ -6,15 +6,21 @@ import logging
 import platform
 import re
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from exobrain.tools.base import Tool, ToolParameter
+from exobrain.tools.base import ConfigurableTool, ToolParameter, register_tool
+
+if TYPE_CHECKING:
+    from exobrain.config import Config
 
 logger = logging.getLogger(__name__)
 
 
-class ShellExecuteTool(Tool):
+@register_tool
+class ShellExecuteTool(ConfigurableTool):
     """Tool to execute shell commands with permission checks."""
+
+    config_key: ClassVar[str] = "shell_execution"
 
     def __init__(
         self,
@@ -236,9 +242,45 @@ class ShellExecuteTool(Tool):
             logger.error(f"Error executing command: {e}")
             return f"Error executing command: {e}"
 
+    @classmethod
+    def from_config(cls, config: "Config") -> "ShellExecuteTool | None":
+        """Create tool instance from configuration.
 
-class GetOSInfoTool(Tool):
+        Args:
+            config: Global application configuration
+
+        Returns:
+            ShellExecuteTool instance if shell_execution is enabled, None otherwise
+        """
+        # Check if shell execution is enabled
+        if not getattr(config.tools, "shell_execution", False):
+            return None
+
+        shell_perms = config.permissions.shell_execution
+        if not shell_perms.get("enabled", False):
+            return None
+
+        # Extract configuration
+        allowed_dirs = shell_perms.get("allowed_directories") or []
+        denied_dirs = shell_perms.get("denied_directories") or []
+        allowed_cmds = shell_perms.get("allowed_commands") or []
+        denied_cmds = shell_perms.get("denied_commands") or []
+        timeout = shell_perms.get("timeout", 30)
+
+        return cls(
+            allowed_directories=allowed_dirs,
+            denied_directories=denied_dirs,
+            allowed_commands=allowed_cmds,
+            denied_commands=denied_cmds,
+            timeout=timeout,
+        )
+
+
+@register_tool
+class GetOSInfoTool(ConfigurableTool):
     """Tool to get information about the current operating system."""
+
+    config_key: ClassVar[str] = ""  # Always enabled, no configuration needed
 
     def __init__(self) -> None:
         super().__init__(
@@ -287,9 +329,26 @@ class GetOSInfoTool(Tool):
             logger.error(f"Error getting OS information: {e}")
             return f"Error getting OS information: {e}"
 
+    @classmethod
+    def from_config(cls, config: "Config") -> "GetOSInfoTool":
+        """Create tool instance from configuration.
 
-class GetUserInfoTool(Tool):
+        OS info tool is always enabled and requires no configuration.
+
+        Args:
+            config: Global application configuration (unused)
+
+        Returns:
+            GetOSInfoTool instance
+        """
+        return cls()
+
+
+@register_tool
+class GetUserInfoTool(ConfigurableTool):
     """Tool to get information about the current user and home directory."""
+
+    config_key: ClassVar[str] = ""  # Always enabled, no configuration needed
 
     def __init__(self) -> None:
         super().__init__(
@@ -323,3 +382,17 @@ class GetUserInfoTool(Tool):
         except Exception as e:
             logger.error(f"Error getting user information: {e}")
             return f"Error getting user information: {e}"
+
+    @classmethod
+    def from_config(cls, config: "Config") -> "GetUserInfoTool":
+        """Create tool instance from configuration.
+
+        User info tool is always enabled and requires no configuration.
+
+        Args:
+            config: Global application configuration (unused)
+
+        Returns:
+            GetUserInfoTool instance
+        """
+        return cls()

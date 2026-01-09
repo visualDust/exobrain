@@ -144,7 +144,6 @@ permissions:
 skills:
   enabled: true
   skills_dir: ~/.exobrain/skills
-  auto_load: true
 mcp:
   enabled: true
   servers: []

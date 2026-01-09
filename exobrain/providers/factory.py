@@ -4,7 +4,7 @@
 from exobrain.config import Config, ModelProviderConfig
 from exobrain.providers.base import ModelProvider
 from exobrain.providers.gemini_provider import GeminiProvider
-from exobrain.providers.local_provider import LocalModelProvider
+from exobrain.providers.openai_compatible_provider import OpenAICompatibleModelProvider
 from exobrain.providers.openai_provider import OpenAIProvider
 
 
@@ -123,7 +123,7 @@ class ModelFactory:
         elif provider_name == "local" or provider_name == "ollama":
             if not config.base_url:
                 raise ValueError(f"{provider_name} requires base_url configuration")
-            return LocalModelProvider(
+            return OpenAICompatibleModelProvider(
                 base_url=config.base_url,
                 model=model_name,
                 api_key=config.api_key or "dummy",

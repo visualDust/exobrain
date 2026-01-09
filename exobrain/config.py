@@ -106,7 +106,6 @@ class SkillsConfig(BaseModel):
 
     enabled: bool = True
     skills_dir: str = "~/.exobrain/skills"
-    auto_load: bool = True
     disabled_skills: list[str] = Field(default_factory=list)  # List of disabled skill names
 
 
@@ -452,7 +451,6 @@ def create_default_config(output_path: str | Path) -> None:
         "skills": {
             "enabled": True,
             "skills_dir": "~/.exobrain/skills",
-            "auto_load": True,
         },
         "mcp": {"enabled": False, "servers": []},
         "memory": {

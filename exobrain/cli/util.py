@@ -6,39 +6,74 @@ from exobrain.cli import load_constitution
 from exobrain.config import Config
 from exobrain.providers.factory import ModelFactory
 from exobrain.tools.base import ToolRegistry
-from exobrain.tools.context7_tools import Context7SearchTool
-from exobrain.tools.file_tools import (
-    EditFileTool,
-    GrepFileTool,
-    ListDirectoryTool,
-    ReadFileTool,
-    SearchFilesTool,
-    WriteFileTool,
-)
-from exobrain.tools.math_tools import MathEvaluateTool
-from exobrain.tools.shell_tools import GetOSInfoTool, GetUserInfoTool, ShellExecuteTool
-from exobrain.tools.time_tools import GetCurrentTimeTool, GetWorldTimeTool
-from exobrain.tools.web_tools import WebFetchTool, WebSearchTool
 
 logger = logging.getLogger(__name__)
+
+
+def auto_register_tools(config: Config, tool_registry: ToolRegistry) -> None:
+    """Automatically register all tools from global tool class registry.
+
+    This function iterates through all tool classes that have been registered
+    via the @register_tool decorator and creates instances based on configuration.
+
+    Args:
+        config: Application configuration
+        tool_registry: Tool registry to register tools into
+    """
+    # Import tools package to trigger @register_tool decorators
+    import exobrain.tools  # noqa: F401
+
+    # Track registered tools by category for logging
+    registered_by_category: dict[str, list[str]] = {}
+
+    # Iterate through all registered tool classes
+    for config_key, tool_class_list in ToolRegistry.get_tool_classes().items():
+        # Handle both single class and list of classes (for backward compatibility)
+        tool_classes = tool_class_list if isinstance(tool_class_list, list) else [tool_class_list]
+
+        for tool_class in tool_classes:
+            try:
+                # Create tool instance from config
+                tool_instance = tool_class.from_config(config)
+
+                if tool_instance is not None:
+                    tool_registry.register(tool_instance)
+
+                    # Track for logging
+                    category = (
+                        config_key if config_key != "__always_enabled__" else "always_enabled"
+                    )
+                    if category not in registered_by_category:
+                        registered_by_category[category] = []
+                    registered_by_category[category].append(tool_instance.name)
+
+                    logger.debug(f"Registered tool: {tool_instance.name} (category: {category})")
+            except Exception as e:
+                logger.error(f"Failed to register tool {tool_class.__name__}: {e}")
+
+    # Log summary
+    total_tools = sum(len(tools) for tools in registered_by_category.values())
+    logger.debug(
+        f"Auto-registered {total_tools} tools across {len(registered_by_category)} categories"
+    )
+    for category, tool_names in registered_by_category.items():
+        logger.debug(f"  {category}: {', '.join(tool_names)}")
 
 
 def create_agent_from_config(
     config: Config,
     model_spec: str | None = None,
-    enable_skills: bool = True,
     constitution_file: str | None = None,
-) -> tuple[Agent, Any]:  # Returns (agent, skills_manager)
+) -> tuple[Agent, Any]:
     """Create an agent from configuration.
 
     Args:
         config: Application configuration
         model_spec: Optional model specification (overrides config default)
-        enable_skills: Whether to enable skills (default: True)
         constitution_file: Optional constitution file path (overrides config)
 
     Returns:
-        Tuple of (Configured Agent instance, Skills manager)
+        Tuple of (Configured Agent instance, Skills manager or None)
     """
     # Create model factory and get provider
     model_factory = ModelFactory(config)
@@ -47,100 +82,8 @@ def create_agent_from_config(
     # Create tool registry
     tool_registry = ToolRegistry()
 
-    # Register tools based on configuration
-    if config.tools.file_system and config.permissions.file_system.get("enabled", True):
-        fs_perms = config.permissions.file_system
-        allowed_paths = fs_perms.get("allowed_paths") or []
-        denied_paths = fs_perms.get("denied_paths") or []
-        max_file_size = fs_perms.get("max_file_size", 10485760)
-        allow_edit = fs_perms.get("allow_edit", False)
-
-        tool_registry.register(ReadFileTool(allowed_paths, denied_paths))
-        tool_registry.register(
-            WriteFileTool(
-                allowed_paths,
-                denied_paths,
-                max_file_size,
-                allow_edit=allow_edit,
-            )
-        )
-        tool_registry.register(
-            EditFileTool(
-                allowed_paths,
-                denied_paths,
-                max_file_size,
-                allow_edit=allow_edit,
-            )
-        )
-        tool_registry.register(ListDirectoryTool(allowed_paths, denied_paths))
-        tool_registry.register(SearchFilesTool(allowed_paths, denied_paths))
-        tool_registry.register(GrepFileTool(allowed_paths, denied_paths))
-
-    if config.tools.time_management:
-        tool_registry.register(GetCurrentTimeTool())
-        tool_registry.register(GetWorldTimeTool())
-
-    # Math evaluation and OS info are always available and require no extra permissions
-    tool_registry.register(MathEvaluateTool())
-    tool_registry.register(GetOSInfoTool())
-    tool_registry.register(GetUserInfoTool())
-
-    # Register shell execution tool if enabled
-    if getattr(config.tools, "shell_execution", False) and config.permissions.shell_execution.get(
-        "enabled", False
-    ):
-        shell_perms = config.permissions.shell_execution
-        allowed_dirs = shell_perms.get("allowed_directories") or []
-        denied_dirs = shell_perms.get("denied_directories") or []
-        allowed_cmds = shell_perms.get("allowed_commands") or []
-        denied_cmds = shell_perms.get("denied_commands") or []
-        timeout = shell_perms.get("timeout", 30)
-
-        tool_registry.register(
-            ShellExecuteTool(
-                allowed_directories=allowed_dirs,
-                denied_directories=denied_dirs,
-                allowed_commands=allowed_cmds,
-                denied_commands=denied_cmds,
-                timeout=timeout,
-            )
-        )
-
-    # Register web tools if enabled
-    if getattr(config.tools, "web_access", False) and config.permissions.web_access.get(
-        "enabled", False
-    ):
-        max_results = config.permissions.web_access.get("max_results", 5)
-        max_content_length = config.permissions.web_access.get("max_content_length", 10000)
-
-        tool_registry.register(WebSearchTool(max_results=max_results))
-        tool_registry.register(WebFetchTool(max_content_length=max_content_length))
-        # Context7 search (uses the same web_access permission scope)
-        ctx7_cfg = getattr(config.mcp, "context7", {}) or {}
-        if ctx7_cfg.get("enabled") and ctx7_cfg.get("api_key"):
-            from exobrain.mcp.context7_client import Context7Client
-
-            ctx7_client = Context7Client(
-                api_key=ctx7_cfg["api_key"],
-                endpoint=ctx7_cfg.get("endpoint", "https://api.context7.com/v1/search"),
-                timeout=ctx7_cfg.get("timeout", 20),
-                max_results=ctx7_cfg.get("max_results", max_results),
-            )
-            tool_registry.register(Context7SearchTool(ctx7_client))
-    # Register location tool if enabled
-    if getattr(config.tools, "location", False) and config.permissions.location.get(
-        "enabled", False
-    ):
-        from exobrain.tools.location_tools import GetUserLocationTool
-
-        location_perms = config.permissions.location
-        provider_url = location_perms.get("provider_url", "https://ipinfo.io/json")
-        timeout = location_perms.get("timeout", 10)
-        token = location_perms.get("token")
-
-        tool_registry.register(
-            GetUserLocationTool(provider_url=provider_url, timeout=timeout, token=token)
-        )
+    # Auto-register all tools from configuration (including skill tools)
+    auto_register_tools(config, tool_registry)
 
     # Load constitution document (defaults to builtin-default if not specified)
     # Use passed constitution_file parameter if provided, otherwise use config
@@ -154,37 +97,23 @@ def create_agent_from_config(
         system_prompt_parts.append("\n\n# Constitution and Behavioral Guidelines\n")
         system_prompt_parts.append(constitution_content)
 
-    # Load skills if enabled
-    skills_manager = None
+    # Add skills summary to system prompt if skills are loaded
     skills_summary = ""
-
-    if enable_skills and getattr(config.skills, "enabled", True):
+    skills_manager = None
+    if getattr(config.skills, "enabled", True):
+        # Import here to avoid circular dependency
         from exobrain.skills.loader import load_default_skills
         from exobrain.skills.manager import SkillsManager
-        from exobrain.tools.skill_tools import GetSkillTool, ListSkillsTool, SearchSkillsTool
 
-        logger.debug("Loading skills...")
         loader = load_default_skills(config)
         skills_manager = SkillsManager(loader.skills)
 
-        # Register skill tools
         if skills_manager.skills:
-            get_skill_tool = GetSkillTool(skills_manager)
-            search_skills_tool = SearchSkillsTool(skills_manager)
-            list_skills_tool = ListSkillsTool(skills_manager)
-
-            tool_registry.register(get_skill_tool)
-            tool_registry.register(search_skills_tool)
-            tool_registry.register(list_skills_tool)
-
-            logger.debug(f"Registered {len(skills_manager.skills)} skills")
-
-        # Add skills summary to system prompt
-        skills_summary = skills_manager.get_all_skills_summary()
-        if skills_summary:
-            system_prompt_parts.append("\n\n# Available Skills\n")
-            system_prompt_parts.append(skills_summary)
-            logger.debug(f"Added skills summary to system prompt")
+            skills_summary = skills_manager.get_all_skills_summary()
+            if skills_summary:
+                system_prompt_parts.append("\n\n# Available Skills\n")
+                system_prompt_parts.append(skills_summary)
+                logger.debug(f"Added skills summary to system prompt")
 
     # Log tool registrations with names for visibility
     tools = tool_registry.list_tools()

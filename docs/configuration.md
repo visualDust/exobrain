@@ -201,7 +201,6 @@ Configure skill loading and management.
 skills:
   enabled: true # Default: true
   skills_dir: "~/.exobrain/skills" # Default: "~/.exobrain/skills"
-  auto_load: true # Default: true
   disabled_skills: [] # List of skill names to disable
 ```
 

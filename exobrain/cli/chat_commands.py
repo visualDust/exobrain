@@ -1008,7 +1008,7 @@ def chat(
     try:
         # Create agent
         agent, skills_manager = create_agent_from_config(
-            config, model, enable_skills=not no_skills, constitution_file=constitution
+            config, model, constitution_file=constitution
         )
 
         # Validate storage options
@@ -1070,7 +1070,7 @@ def ask(
     try:
         # Create agent
         agent, skills_manager = create_agent_from_config(
-            config, model, enable_skills=not no_skills, constitution_file=constitution
+            config, model, constitution_file=constitution
         )
 
         # Set verbose mode if requested
