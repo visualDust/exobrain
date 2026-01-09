@@ -67,6 +67,7 @@ class SkillsConfig(BaseModel):
     enabled: bool = True
     skills_dir: str = "~/.exobrain/skills"
     auto_load: bool = True
+    disabled_skills: list[str] = Field(default_factory=list)  # List of disabled skill names
 
 
 class MCPConfig(BaseModel):
@@ -110,7 +111,6 @@ class LoggingConfig(BaseModel):
     rotate: bool = True
     max_size: int = 10485760
     format: str = "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"
-    audit: dict[str, Any] = Field(default_factory=dict)
 
 
 class Config(BaseModel):
@@ -435,7 +435,6 @@ def create_default_config(output_path: str | Path) -> None:
             "rotate": True,
             "max_size": 10485760,
             "format": "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s",
-            "audit": {"enabled": True, "file": "~/.exobrain/logs/audit.log"},
         },
     }
 

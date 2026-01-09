@@ -214,8 +214,8 @@ def create_agent_from_config(
     tools_chars = len(tools_json)
 
     # Log debug information
-    logger.info(
-        f"Model context usage (characters):\n"
+    logger.debug(
+        f"Prefix usage (characters):\n"
         f"  Constitution: {constitution_chars:,} chars\n"
         f"  Skills summary: {skills_chars:,} chars\n"
         f"  Tools schemas: {tools_chars:,} chars ({len(tools)} tools)\n"

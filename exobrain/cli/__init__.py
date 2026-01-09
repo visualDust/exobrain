@@ -82,7 +82,7 @@ def load_constitution(constitution_path: str | Path | None = None) -> str:
         if path.exists():
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
-                logger.info(f"Loaded constitution from: {path}")
+                logger.debug(f"Loaded constitution from: {path}")
                 return content
         else:
             logger.warning(f"Constitution file not found: {constitution_path}")

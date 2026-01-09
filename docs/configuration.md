@@ -345,9 +345,6 @@ logging:
   rotate: true
   max_size: 10485760 # 10MB
   format: "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"
-  audit:
-    enabled: true
-    file: ~/.exobrain/logs/audit.log
 ```
 
 **Log Levels:**
