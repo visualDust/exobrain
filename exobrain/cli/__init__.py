@@ -10,6 +10,7 @@ from rich.panel import Panel
 
 from exobrain.cli.config_wizard import init_config
 from exobrain.cli.constitution_commands import constitution_group
+from exobrain.cli.init_commands import init
 from exobrain.cli.mcp_commands import mcp
 from exobrain.cli.models_commands import models
 from exobrain.cli.sessions_commands import sessions
@@ -175,13 +176,14 @@ def main(ctx: click.Context, config: str | None, verbose: bool) -> None:
     log_level = "DEBUG" if verbose else "INFO"
     setup_logging(log_level)
 
-    # Check if this is a config init command - it doesn't need existing config
+    # Check if this is a command that doesn't need existing config
     import sys
 
     is_config_init = len(sys.argv) >= 3 and sys.argv[1] == "config" and sys.argv[2] == "init"
+    is_project_init = len(sys.argv) >= 2 and sys.argv[1] == "init"
 
-    # Load configuration (skip for config init)
-    if not is_config_init:
+    # Load configuration (skip for init commands that don't need config)
+    if not is_config_init and not is_project_init:
         try:
             if config:
                 cfg, cfg_metadata = load_config(Path(config))
@@ -214,7 +216,7 @@ def main(ctx: click.Context, config: str | None, verbose: bool) -> None:
         # Store config and metadata in context
         ctx.obj = {"config": cfg, "config_metadata": cfg_metadata}
     else:
-        # For config init, just provide empty context
+        # For init commands, just provide empty context
         ctx.obj = {}
 
 
@@ -262,6 +264,7 @@ config_cmd.add_command(reset)
 
 
 # Register command groups
+main.add_command(init)  # Project initialization command
 main.add_command(models)
 main.add_command(sessions)
 main.add_command(mcp)
