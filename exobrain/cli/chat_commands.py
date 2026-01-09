@@ -113,7 +113,11 @@ def _extract_tool_events(
 
 
 async def run_streaming_chat(
-    agent: Agent, user_input: str, console: Console, render_markdown: bool = False
+    agent: Agent,
+    user_input: str,
+    console: Console,
+    status_handler: "CLIStatusHandler | None" = None,
+    render_markdown: bool = False,
 ) -> None:
     """Run streaming chat with enhanced UI.
 
@@ -121,6 +125,7 @@ async def run_streaming_chat(
         agent: The agent instance
         user_input: User's message
         console: Rich console for output
+        status_handler: Optional status handler for managing live display
         render_markdown: Whether to render the final assistant reply as Markdown
     """
     # Buffer for collecting tool output
@@ -129,17 +134,7 @@ async def run_streaming_chat(
     in_tool_section = False
     assistant_response = ""
 
-    # Clear the "(generating...)" indicator and start output
-    console.print("\r[bold cyan]Assistant[/bold cyan] [dim](thinking...)[/dim]")
     live: Live | None = None
-
-    # Temporarily disable status handler's live display if using markdown
-    status_handler = agent.status_callback if hasattr(agent, "status_callback") else None
-    original_ensure_display = None
-    if render_markdown and status_handler and hasattr(status_handler, "_ensure_display"):
-        # Save original method and replace with no-op to prevent live display conflicts
-        original_ensure_display = status_handler._ensure_display
-        status_handler._ensure_display = lambda: None
 
     if render_markdown:
         live = Live(Markdown(""), console=console, refresh_per_second=8, transient=False)
@@ -244,10 +239,6 @@ async def run_streaming_chat(
         if assistant_response:
             console.print()
             console.print("[dim]✓ Response complete[/dim]")
-
-    # Restore original _ensure_display method if we replaced it
-    if original_ensure_display and status_handler:
-        status_handler._ensure_display = original_ensure_display
 
 
 async def run_chat_session(
@@ -519,7 +510,10 @@ async def run_chat_session(
     # Create status handler first
     status_handler = CLIStatusHandler(console)
 
-    # Setup permission callback
+    # Register event listeners
+    agent.events.register(status_handler.handle_event)
+
+    # Setup permission handler
     async def permission_handler(denied_info: dict[str, Any]) -> bool:
         """Handle permission requests from agent."""
         # Stop live display to avoid interfering with user input
@@ -533,9 +527,7 @@ async def run_chat_session(
 
         return granted
 
-    agent.permission_callback = permission_handler
-    # Share status updates with the TUI
-    agent.status_callback = status_handler
+    agent.permission_handler = permission_handler
 
     while True:
         try:
@@ -609,9 +601,6 @@ async def run_chat_session(
             # Track history length before processing
             history_len_before = len(agent.conversation_history)
 
-            # Show assistant header and processing indicator
-            console.print("\n[bold cyan]Assistant[/bold cyan] [dim](thinking...)[/dim]")
-
             # Process message with agent
             if agent.stream:
                 # Streaming mode with enhanced UI
@@ -619,13 +608,11 @@ async def run_chat_session(
                     agent,
                     user_input,
                     console,
+                    status_handler=status_handler,
                     render_markdown=config.cli.render_markdown,
                 )
             else:
                 # Non-streaming mode
-                # Clear the "(generating...)" indicator
-                console.print("\r[bold cyan]Assistant[/bold cyan] [dim](thinking...)[/dim]")
-
                 response = await agent.process_message(user_input)
 
                 if config.cli.render_markdown and response:
@@ -872,7 +859,7 @@ async def run_tui_chat_session(
     # Store skills manager for header counts
     app._skills_manager = skills_manager
 
-    # Setup permission callback now that the app exists
+    # Setup permission handler now that the app exists
     async def permission_handler(denied_info: dict[str, Any]) -> bool:
         """Handle permission requests from agent using the TUI modal."""
         granted, scope = await app.request_permission(denied_info)
@@ -882,8 +869,10 @@ async def run_tui_chat_session(
 
         return granted
 
-    agent.permission_callback = permission_handler
-    agent.status_callback = app.handle_agent_status
+    agent.permission_handler = permission_handler
+
+    # Register TUI event handler
+    agent.events.register(app.handle_agent_event)
 
     # Callback to save messages
     def on_message(
@@ -1097,7 +1086,7 @@ def ask(
 
             return granted
 
-        agent.permission_callback = permission_handler
+        agent.permission_handler = permission_handler
 
         # Process query
         async def process() -> None:

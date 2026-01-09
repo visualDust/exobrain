@@ -9,6 +9,7 @@ from rich.spinner import Spinner
 from rich.text import Text
 
 from exobrain.agent.base import AgentState
+from exobrain.agent.events import BaseEvent, StateChangedEvent, ToolCompletedEvent
 
 
 class StatusPanel:
@@ -290,7 +291,7 @@ class LiveStatusDisplay:
 
 
 class CLIStatusHandler:
-    """Shared status callback handler for CLI (non-TUI) sessions."""
+    """Event-based status handler for CLI (non-TUI) sessions."""
 
     BUSY_STATES = {
         AgentState.THINKING,
@@ -304,59 +305,59 @@ class CLIStatusHandler:
         self.panel = StatusPanel(console)
         self.display = LiveStatusDisplay(console, self.panel)
         self._active = False
+        self._has_printed_thinking = False  # Track if we've printed thinking indicator
 
-    def _ensure_display(self) -> None:
-        if not self._active:
-            self.display.start()
-            self._active = True
+    async def handle_event(self, event: BaseEvent) -> None:
+        """Handle agent events.
 
-    async def __call__(self, state: AgentState, details: dict | None = None) -> None:
-        """Update status panel based on agent callbacks."""
-        details = details or {}
-        self.panel.update(
-            state=state,
-            iteration=details.get("iteration"),
-            tool=details.get("tool"),
+        Args:
+            event: The event to handle
+        """
+        if isinstance(event, StateChangedEvent):
+            await self._handle_state_change(event)
+        elif isinstance(event, ToolCompletedEvent):
+            await self._handle_tool_completed(event)
+
+    async def _handle_state_change(self, event: StateChangedEvent) -> None:
+        """Handle state change events."""
+        # Convert string state back to AgentState enum
+        try:
+            state = AgentState(event.new_state)
+        except ValueError:
+            state = AgentState.IDLE
+
+        # Simple static printing for thinking state
+        if state == AgentState.THINKING and not self._has_printed_thinking:
+            self.console.print("\n[bold cyan]Assistant[/bold cyan] [dim](thinking...)[/dim]")
+            self._has_printed_thinking = True
+        elif state in (AgentState.STREAMING, AgentState.FINISHED):
+            # Reset the flag when response starts or completes for next conversation
+            self._has_printed_thinking = False
+
+    async def _handle_tool_completed(self, event: ToolCompletedEvent) -> None:
+        """Handle tool completed events."""
+        if not event.summary:
+            return
+
+        is_error = not event.success
+        style = "red" if is_error else "cyan"
+
+        # Limit summary to 3 lines for non-TUI display
+        lines = [line.strip() for line in event.summary.splitlines() if line.strip()]
+        summary_compact = "\n".join(lines[:3]) if lines else "(no output)"
+        if len(lines) > 3:
+            summary_compact += "\n..."
+
+        self.console.print(
+            Panel(
+                summary_compact,
+                title=f"[bold]{event.tool_name}[/bold]",
+                border_style=style,
+                padding=(0, 1),
+            )
         )
 
-        # Inline tool events as chat-like entries
-        tool_event = details.get("tool_event")
-        if tool_event:
-            summary = tool_event.get("summary", "")
-            name = tool_event.get("name", "tool")
-            is_error = tool_event.get("error", False)
-            style = "red" if is_error else "cyan"
-            # Limit summary to 3 lines for non-TUI display
-            lines = [line.strip() for line in summary.splitlines() if line.strip()]
-            summary_compact = "\n".join(lines[:3]) if lines else "(no output)"
-            if len(lines) > 3:
-                summary_compact += "\n..."
-            self.console.print(
-                Panel(
-                    summary_compact,
-                    title=f"[bold]{name}[/bold]",
-                    border_style=style,
-                    padding=(0, 1),
-                )
-            )
-
-        if state in self.BUSY_STATES:
-            self._ensure_display()
-            self.display.update()
-        else:
-            # Show final state then stop live display
-            if self._active:
-                self.display.update()
-                self.display.stop(final_print=True)
-                self._active = False
-                self.console.print()
-            else:
-                # Render once without keeping live display running
-                self.console.print()
-                self.console.print(self.panel.render())
-
     def close(self, final_print: bool = False) -> None:
-        """Clean up live display if running."""
-        if self._active:
-            self.display.stop(final_print=final_print)
-            self._active = False
+        """Clean up resources."""
+        # Reset state for next conversation
+        self._has_printed_thinking = False
