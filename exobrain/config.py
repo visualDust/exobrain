@@ -220,16 +220,20 @@ def get_user_config_path() -> Path:
     return get_user_config_directory() / "config.yaml"
 
 
-def merge_configs(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+def merge_configs(base: dict[str, Any], override: dict[str, Any] | None) -> dict[str, Any]:
     """Deep merge two configuration dictionaries.
 
     Args:
         base: Base configuration
-        override: Configuration to merge (takes priority)
+        override: Configuration to merge (takes priority), can be None
 
     Returns:
         Merged configuration
     """
+    # Handle None override (empty YAML file or parsing issues)
+    if override is None:
+        return base.copy()
+
     result = base.copy()
 
     for key, value in override.items():

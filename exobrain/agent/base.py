@@ -16,6 +16,8 @@ from exobrain.agent.events import (
     ToolCompletedEvent,
     ToolStartedEvent,
 )
+from exobrain.memory.handlers.base import MessageHandler
+from exobrain.memory.handlers.truncating import TruncatingMessageHandler
 from exobrain.providers.base import Message, ModelProvider, ModelResponse
 from exobrain.tools.base import Tool, ToolRegistry
 
@@ -42,6 +44,7 @@ class Agent(BaseModel):
     state: AgentState = AgentState.IDLE
     conversation_history: list[Message] = []
     system_prompt: str = "You are a helpful AI assistant."
+    message_handler: MessageHandler | None = None
     max_iterations: int = 500
     temperature: float = 0.7
     stream: bool = False
@@ -86,6 +89,15 @@ class Agent(BaseModel):
             return False
         return iteration >= self.max_iterations
 
+    def model_post_init(self, __context: Any) -> None:
+        """Initialize after model creation."""
+        # Create default handler if not provided
+        if self.message_handler is None:
+            self.message_handler = TruncatingMessageHandler(
+                model_provider=self.model_provider,
+                load_percentage=0.5,
+            )
+
     async def process_message(self, user_message: str) -> str | AsyncIterator[str]:
         """Process a user message and return a response.
 
@@ -98,8 +110,11 @@ class Agent(BaseModel):
         # Add user message to history
         self.add_message(Message(role="user", content=user_message))
 
-        # Build messages including system prompt
-        messages = [Message(role="system", content=self.system_prompt)] + self.conversation_history
+        # Use handler to prepare messages for API
+        messages = self.message_handler.prepare_for_api(
+            messages=self.conversation_history,
+            system_prompt=self.system_prompt,
+        )
 
         # Get available tools
         available_tools = self.get_available_tools()

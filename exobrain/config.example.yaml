@@ -164,6 +164,15 @@ memory:
     max_items: 20
   save_tool_history: true # Save tool execution results to conversation history
   tool_content_max_length: 500 # Maximum length of tool message content to save (characters)
+
+  # Message handler configuration
+  message_handler:
+    type: "truncating" # Handler type: truncating, sliding_window (future), compressing (future), hybrid (future)
+
+    # Truncating handler options
+    truncating:
+      load_percentage: 0.5 # Use 50% of available context for history (0.0-1.0)
+      reserved_output_tokens: 4096 # Reserve tokens for model output
 cli:
   theme: auto
   show_token_usage: true

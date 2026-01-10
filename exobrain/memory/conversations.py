@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from exobrain.memory.handlers.base import MessageHandler
+from exobrain.memory.handlers.truncating import TruncatingMessageHandler
 from exobrain.memory.storage import ConversationStorage
 from exobrain.providers.base import Message, ModelProvider
 
@@ -18,6 +20,7 @@ class ConversationManager:
         self,
         storage_path: Path,
         model_provider: ModelProvider,
+        message_handler: MessageHandler | None = None,
         save_tool_history: bool = True,
         tool_content_max_length: int = 1000,
     ):
@@ -26,11 +29,21 @@ class ConversationManager:
         Args:
             storage_path: Root path for conversation storage
             model_provider: Model provider for token counting
+            message_handler: Handler for loading/preparing messages (None = use default)
             save_tool_history: Whether to save tool messages to conversation history
             tool_content_max_length: Maximum length of tool message content to save
         """
         self.storage = ConversationStorage(storage_path)
         self.model_provider = model_provider
+
+        # Use provided handler or create default
+        if message_handler is None:
+            message_handler = TruncatingMessageHandler(
+                model_provider=model_provider,
+                load_percentage=0.5,
+            )
+        self.message_handler = message_handler
+
         self.sessions_index = self.storage.load_sessions_index()
         self.save_tool_history = save_tool_history
         self.tool_content_max_length = tool_content_max_length
@@ -81,12 +94,18 @@ class ConversationManager:
         logger.debug(f"Created new session: {session_id}")
         return session_id
 
-    def load_session(self, session_id: str, token_budget: int | None = None) -> dict[str, Any]:
+    def load_session(
+        self,
+        session_id: str,
+        token_budget: int | None = None,
+        system_prompt: str | None = None,
+    ) -> dict[str, Any]:
         """Load a conversation session.
 
         Args:
             session_id: Session identifier
-            token_budget: Maximum tokens to load (None = load all)
+            token_budget: Maximum tokens to load (None = load all, deprecated - use handler config)
+            system_prompt: System prompt to account for in budget calculation
 
         Returns:
             Dict with 'messages', 'metadata', and loading stats
@@ -99,22 +118,27 @@ class ConversationManager:
         if not metadata:
             raise ValueError(f"Session metadata not found: {session_id}")
 
-        # Load messages
+        # Load all messages from storage
         all_messages = self.storage.load_all_messages(session_id)
 
-        # Apply token budget if specified
-        if token_budget is not None and all_messages:
-            result = self._load_within_budget(all_messages, token_budget)
-            loaded_messages = result["messages"]
-            load_stats = {
-                "loaded_count": result["loaded_count"],
-                "loaded_tokens": result["loaded_tokens"],
-                "truncated_count": result["truncated_count"],
-                "total_count": result["total_count"],
-            }
+        # Use handler to load messages within constraints
+        if token_budget is not None or system_prompt is not None:
+            # Let handler manage the loading
+            result = self.message_handler.load_messages(
+                all_messages=all_messages,
+                system_prompt=system_prompt,
+            )
+            loaded_messages = result.messages
+            load_stats = result.to_dict()
+
+            # Log detailed result at DEBUG level
+            logger.debug(f"Session {session_id} load result:\n{result}")
         else:
+            # Load all messages without constraints
             loaded_messages = all_messages
-            total_tokens = sum(msg.get("tokens", 0) for msg in all_messages)
+            total_tokens = sum(
+                self.message_handler.estimate_message_tokens(msg) for msg in all_messages
+            )
             load_stats = {
                 "loaded_count": len(all_messages),
                 "loaded_tokens": total_tokens,
@@ -122,10 +146,10 @@ class ConversationManager:
                 "total_count": len(all_messages),
             }
 
-        logger.debug(
-            f"Loaded session {session_id}: {load_stats['loaded_count']} messages "
-            f"({load_stats['loaded_tokens']} tokens)"
-        )
+            logger.debug(
+                f"Loaded session {session_id}: {load_stats['loaded_count']} messages "
+                f"({load_stats['loaded_tokens']} tokens) - no constraints"
+            )
 
         return {
             "messages": loaded_messages,
@@ -136,6 +160,9 @@ class ConversationManager:
     def _load_within_budget(self, all_messages: list[dict], token_budget: int) -> dict[str, Any]:
         """Load messages within token budget, starting from most recent.
 
+        DEPRECATED: Use message_handler.load_messages() instead.
+        This method is kept for backward compatibility.
+
         Args:
             all_messages: All available messages
             token_budget: Maximum tokens to load
@@ -143,35 +170,20 @@ class ConversationManager:
         Returns:
             Dict with loaded messages and statistics
         """
-        # Reverse to start from most recent
-        messages_reversed = list(reversed(all_messages))
+        import warnings
 
-        loaded = []
-        total_tokens = 0
+        warnings.warn(
+            "_load_within_budget is deprecated, use message_handler.load_messages()",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
-        for msg in messages_reversed:
-            msg_tokens = msg.get("tokens", 0)
-            if msg_tokens == 0:
-                # Estimate if not recorded
-                msg_tokens = self.model_provider.count_tokens(msg.get("content", ""))
-
-            if total_tokens + msg_tokens > token_budget:
-                # Would exceed budget, stop loading
-                break
-
-            loaded.append(msg)
-            total_tokens += msg_tokens
-
-        # Reverse back to chronological order
-        loaded.reverse()
-
-        return {
-            "messages": loaded,
-            "loaded_count": len(loaded),
-            "loaded_tokens": total_tokens,
-            "truncated_count": len(all_messages) - len(loaded),
-            "total_count": len(all_messages),
-        }
+        # Delegate to handler
+        result = self.message_handler.load_messages(
+            all_messages=all_messages,
+            system_prompt=None,
+        )
+        return result.to_dict()
 
     def save_message(self, session_id: str, message: Message) -> None:
         """Save a message to a session.
