@@ -193,6 +193,10 @@ class SkillLoader:
         return self.disabled_skills.copy()
 
 
+# Cache for the skills loader to avoid reloading skills multiple times
+_SHARED_SKILLS_LOADER: Optional[SkillLoader] = None
+
+
 def load_default_skills(config: Any) -> SkillLoader:
     """Load skills from default locations.
 
@@ -202,12 +206,22 @@ def load_default_skills(config: Any) -> SkillLoader:
     3. User global skills - ~/.exobrain/skills
     4. Project-level skills - ./.exobrain/skills (highest priority)
 
+    This function caches the loader to avoid reloading skills multiple times
+    during the same session.
+
     Args:
         config: Application configuration
 
     Returns:
         SkillLoader with loaded skills
     """
+    global _SHARED_SILL_LOADER
+
+    # Return cached loader if available
+    if _SHARED_SILL_LOADER is not None:
+        logger.debug("Using cached skills loader")
+        return _SHARED_SILL_LOADER
+
     skill_paths = []
 
     # 1. Add builtin skills (from submodules) - lowest priority
@@ -256,4 +270,17 @@ def load_default_skills(config: Any) -> SkillLoader:
     loader = SkillLoader(skill_paths, disabled_skills=disabled_skills)
     loader.load_all_skills()
 
+    # Cache the loader
+    _SHARED_SILL_LOADER = loader
+
     return loader
+
+
+def clear_skills_cache() -> None:
+    """Clear the skills loader cache.
+
+    This is useful for testing or when you want to force a reload of skills.
+    """
+    global _SHARED_SILL_LOADER
+    _SHARED_SILL_LOADER = None
+    logger.debug("Cleared skills loader cache")
