@@ -1,8 +1,11 @@
+# Manually ignored files
+config.yaml
+.ignored
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-config.yaml
 
 # C extensions
 *.so

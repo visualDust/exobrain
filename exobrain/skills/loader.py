@@ -215,12 +215,12 @@ def load_default_skills(config: Any) -> SkillLoader:
     Returns:
         SkillLoader with loaded skills
     """
-    global _SHARED_SILL_LOADER
+    global _SHARED_SKILLS_LOADER
 
     # Return cached loader if available
-    if _SHARED_SILL_LOADER is not None:
+    if _SHARED_SKILLS_LOADER is not None:
         logger.debug("Using cached skills loader")
-        return _SHARED_SILL_LOADER
+        return _SHARED_SKILLS_LOADER
 
     skill_paths = []
 
@@ -271,7 +271,7 @@ def load_default_skills(config: Any) -> SkillLoader:
     loader.load_all_skills()
 
     # Cache the loader
-    _SHARED_SILL_LOADER = loader
+    _SHARED_SKILLS_LOADER = loader
 
     return loader
 
@@ -281,6 +281,6 @@ def clear_skills_cache() -> None:
 
     This is useful for testing or when you want to force a reload of skills.
     """
-    global _SHARED_SILL_LOADER
-    _SHARED_SILL_LOADER = None
+    global _SHARED_SKILLS_LOADER
+    _SHARED_SKILLS_LOADER = None
     logger.debug("Cleared skills loader cache")
