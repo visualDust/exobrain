@@ -237,6 +237,12 @@ def load_default_skills(config: Any) -> SkillLoader:
         skill_paths.append(obsidian_skills_path)
         logger.debug(f"Added Obsidian skills path: {obsidian_skills_path}")
 
+    # Add ExoBrain specific skills
+    exobrain_skills_path = Path(__file__).parent / "exobrain"
+    if exobrain_skills_path.exists():
+        skill_paths.append(exobrain_skills_path)
+        logger.debug(f"Added ExoBrain skills path: {exobrain_skills_path}")
+
     # 2. Add configured skills directory (if specified in config)
     if hasattr(config, "skills") and hasattr(config.skills, "skills_dir"):
         configured_path = Path(config.skills.skills_dir).expanduser()
