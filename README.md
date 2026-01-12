@@ -18,6 +18,7 @@ A toy AI assistant with tool calling capabilities and file system access, runnin
 - 💬 **Session Management** - Project-level and global session storage
 - 📜 **Constitutional AI** - Customizable behavioral guidelines
 
+For OpenAI apis, currently up to GPT-5 is supported, while GPT-5.2 is not (due to planning is not currently supported yet), but will be added in future updates.
 The purpose of this project is to experiment with building a modular AI assistant that can integrate multiple models, and tools, with full control and transparency. Only use it for fun, not for production.
 
 ## Quick Start

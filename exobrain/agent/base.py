@@ -734,6 +734,9 @@ class Agent(BaseModel):
             "write_file",
             "list_directory",
             "search_files",
+            "edit_file",
+            "grep_files",
+            "read_pdf",
         ]:
             denied_info["resource"] = tool_args.get("path", "")
             if "editing not allowed" in error_msg.lower():

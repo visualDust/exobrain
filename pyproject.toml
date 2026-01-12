@@ -1,6 +1,6 @@
 [project]
 name = "exobrain"
-version = "0.1.3"
+version = "0.1.4"
 description = "A toy AI assistant with agent capabilities and file system access"
 authors = [{ name = "VisualDust", email = "gavin@gong.host" }]
 requires-python = ">=3.10,<4"
@@ -35,6 +35,7 @@ dependencies = [
     "pre-commit>=3.8.0",
     "textual>=0.89.0",
     "ddgs>=9.5.2",
+    "pypdf>=4.0.0,<5",
 ]
 
 [project.optional-dependencies]
