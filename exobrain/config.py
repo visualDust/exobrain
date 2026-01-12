@@ -152,6 +152,12 @@ class LoggingConfig(BaseModel):
     format: str = "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"
 
 
+class TasksConfig(BaseModel):
+    """Tasks configuration."""
+
+    enabled: bool = True
+
+
 class Config(BaseModel):
     """Main configuration."""
 
@@ -165,6 +171,7 @@ class Config(BaseModel):
     memory: MemoryConfig
     cli: CLIConfig
     logging: LoggingConfig
+    tasks: TasksConfig = Field(default_factory=TasksConfig)
 
 
 def expand_env_vars(data: Any) -> Any:

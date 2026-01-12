@@ -13,6 +13,7 @@ from exobrain.tools import math_tools  # Mathematical evaluation
 from exobrain.tools import pdf_tools  # PDF processing
 from exobrain.tools import shell_tools  # Shell command execution and OS info
 from exobrain.tools import skill_tools  # Skill management tools
+from exobrain.tools import task_tools  # Task management tools
 from exobrain.tools import time_tools  # Time and timezone tools
 from exobrain.tools import web_tools  # Web search and fetch
 
@@ -24,6 +25,7 @@ __all__ = [
     "pdf_tools",
     "shell_tools",
     "skill_tools",
+    "task_tools",
     "time_tools",
     "web_tools",
 ]

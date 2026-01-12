@@ -280,6 +280,11 @@ from exobrain.cli import chat_commands
 main.add_command(chat_commands.chat)
 main.add_command(chat_commands.ask)
 
+# Import and register task commands
+from exobrain.cli.task_commands import task
+
+main.add_command(task)
+
 
 if __name__ == "__main__":
     main()
