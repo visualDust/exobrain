@@ -17,8 +17,48 @@ class ModelProviderConfig(BaseModel):
 
     api_key: str | None = None
     base_url: str | None = None
-    models: list[str] = []
-    default_params: dict[str, Any] = Field(default_factory=dict)
+    models: list[
+        str | dict[str, Any]
+    ] = []  # Can be str or dict with name/description/default_params
+    default_params: dict[str, Any] = Field(
+        default_factory=dict
+    )  # Provider-level default (legacy support)
+
+    def get_model_list(self) -> list[str]:
+        """Get list of model names (extracts names from both string and dict formats)."""
+        result = []
+        for item in self.models:
+            if isinstance(item, str):
+                result.append(item)
+            elif isinstance(item, dict) and "name" in item:
+                result.append(item["name"])
+        return result
+
+    def get_model_description(self, model_name: str) -> str:
+        """Get description for a specific model."""
+        for item in self.models:
+            if isinstance(item, str) and item == model_name:
+                return ""
+            elif isinstance(item, dict) and item.get("name") == model_name:
+                return item.get("description", "")
+        return ""
+
+    def get_model_default_params(self, model_name: str) -> dict[str, Any]:
+        """Get default parameters for a specific model.
+
+        Falls back to provider-level default_params if not specified at model level.
+        """
+        # Check model-level default_params first
+        for item in self.models:
+            if isinstance(item, dict) and item.get("name") == model_name:
+                model_params = item.get("default_params", {})
+                if model_params:
+                    return model_params
+                # If model exists but has no params, fall through to provider default
+                break
+
+        # Fall back to provider-level default_params (for backwards compatibility)
+        return self.default_params
 
 
 class ModelsConfig(BaseModel):
@@ -66,8 +106,7 @@ class SkillsConfig(BaseModel):
 
     enabled: bool = True
     skills_dir: str = "~/.exobrain/skills"
-    builtin_skills: list[str] = Field(default_factory=list)
-    auto_load: bool = True
+    disabled_skills: list[str] = Field(default_factory=list)  # List of disabled skill names
 
 
 class MCPConfig(BaseModel):
@@ -99,9 +138,7 @@ class CLIConfig(BaseModel):
     """CLI configuration."""
 
     theme: str = "auto"
-    show_timestamps: bool = False
     show_token_usage: bool = True
-    syntax_highlighting: bool = True
     render_markdown: bool = True
 
 
@@ -112,16 +149,13 @@ class LoggingConfig(BaseModel):
     file: str = "~/.exobrain/logs/exobrain.log"
     rotate: bool = True
     max_size: int = 10485760
-    backup_count: int = 5
     format: str = "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"
-    audit: dict[str, Any] = Field(default_factory=dict)
 
 
-class PerformanceConfig(BaseModel):
-    """Performance configuration."""
+class TasksConfig(BaseModel):
+    """Tasks configuration."""
 
-    cache: dict[str, Any] = Field(default_factory=dict)
-    concurrency: dict[str, Any] = Field(default_factory=dict)
+    enabled: bool = True
 
 
 class Config(BaseModel):
@@ -137,7 +171,7 @@ class Config(BaseModel):
     memory: MemoryConfig
     cli: CLIConfig
     logging: LoggingConfig
-    performance: PerformanceConfig
+    tasks: TasksConfig = Field(default_factory=TasksConfig)
 
 
 def expand_env_vars(data: Any) -> Any:
@@ -193,16 +227,20 @@ def get_user_config_path() -> Path:
     return get_user_config_directory() / "config.yaml"
 
 
-def merge_configs(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+def merge_configs(base: dict[str, Any], override: dict[str, Any] | None) -> dict[str, Any]:
     """Deep merge two configuration dictionaries.
 
     Args:
         base: Base configuration
-        override: Configuration to merge (takes priority)
+        override: Configuration to merge (takes priority), can be None
 
     Returns:
         Merged configuration
     """
+    # Handle None override (empty YAML file or parsing issues)
+    if override is None:
+        return base.copy()
+
     result = base.copy()
 
     for key, value in override.items():
@@ -238,7 +276,6 @@ def get_default_config() -> dict[str, Any]:
         "memory": {},
         "cli": {},
         "logging": {},
-        "performance": {},
     }
 
 
@@ -410,19 +447,21 @@ def create_default_config(output_path: str | Path) -> None:
         "permissions": {
             "file_system": {
                 "enabled": True,
-                "allowed_paths": ["~/Documents", "~/Desktop"],
+                "allowed_paths": ["~/Documents", "~/Desktop", "/tmp"],
                 "denied_paths": ["~/.ssh", "~/.aws"],
                 "max_file_size": 10485760,
                 "allow_edit": False,
             },
-            "code_execution": {"enabled": False, "timeout": 30},
+            "code_execution": {"enabled": False, "timeout": 30},  # Default timeout in seconds
+            "shell_execution": {
+                "enabled": False,
+                "timeout": 600,
+            },  # Default timeout in seconds (10 minutes)
             "web_access": {"enabled": False},
         },
         "skills": {
             "enabled": True,
             "skills_dir": "~/.exobrain/skills",
-            "builtin_skills": ["note_manager"],
-            "auto_load": True,
         },
         "mcp": {"enabled": False, "servers": []},
         "memory": {
@@ -430,16 +469,13 @@ def create_default_config(output_path: str | Path) -> None:
             "long_term": {
                 "enabled": True,
                 "storage_path": "~/.exobrain/data/conversations",
-                "auto_save_interval": 60,
             },
             "save_tool_history": True,
             "tool_content_max_length": 1000,
         },
         "cli": {
             "theme": "auto",
-            "show_timestamps": False,
             "show_token_usage": True,
-            "syntax_highlighting": True,
             "render_markdown": True,
         },
         "logging": {
@@ -447,16 +483,7 @@ def create_default_config(output_path: str | Path) -> None:
             "file": "~/.exobrain/logs/exobrain.log",
             "rotate": True,
             "max_size": 10485760,
-            "backup_count": 5,
             "format": "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s",
-            "audit": {"enabled": True, "file": "~/.exobrain/logs/audit.log"},
-        },
-        "performance": {
-            "cache": {"enabled": True, "ttl": 3600, "max_size": 100},
-            "concurrency": {
-                "max_concurrent_requests": 5,
-                "max_concurrent_tools": 3,
-            },
         },
     }
 

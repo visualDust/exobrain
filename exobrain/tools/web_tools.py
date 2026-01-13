@@ -2,19 +2,25 @@
 
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import httpx
 from bs4 import BeautifulSoup
 from ddgs import DDGS
 
-from exobrain.tools.base import Tool, ToolParameter
+from exobrain.tools.base import ConfigurableTool, ToolParameter, register_tool
+
+if TYPE_CHECKING:
+    from exobrain.config import Config
 
 logger = logging.getLogger(__name__)
 
 
-class WebSearchTool(Tool):
+@register_tool
+class WebSearchTool(ConfigurableTool):
     """Tool for searching the web using DuckDuckGo."""
+
+    config_key: ClassVar[str] = "web_access"
 
     def __init__(self, max_results: int = 5):
         """Initialize web search tool.
@@ -38,6 +44,7 @@ class WebSearchTool(Tool):
                 ),
             },
             requires_permission=True,
+            permission_scope="web_access",
         )
         # Set after super().__init__() to ensure Pydantic doesn't clear it
         self._max_results = max_results
@@ -112,9 +119,32 @@ class WebSearchTool(Tool):
         results = await loop.run_in_executor(None, _sync_search)
         return results
 
+    @classmethod
+    def from_config(cls, config: "Config") -> "WebSearchTool | None":
+        """Create tool instance from configuration.
 
-class WebFetchTool(Tool):
+        Args:
+            config: Global application configuration
+
+        Returns:
+            WebSearchTool instance if web_access is enabled, None otherwise
+        """
+        if not getattr(config.tools, "web_access", False):
+            return None
+
+        web_perms = config.permissions.web_access
+        if not web_perms.get("enabled", False):
+            return None
+
+        max_results = web_perms.get("max_results", 5)
+        return cls(max_results=max_results)
+
+
+@register_tool
+class WebFetchTool(ConfigurableTool):
     """Tool for fetching and extracting text from web pages."""
+
+    config_key: ClassVar[str] = "web_access"
 
     def __init__(self, max_content_length: int = 10000):
         """Initialize web fetch tool.
@@ -138,6 +168,7 @@ class WebFetchTool(Tool):
                 ),
             },
             requires_permission=True,
+            permission_scope="web_access",
         )
         # Set after super().__init__() to ensure Pydantic doesn't clear it
         self._max_content_length = max_content_length
@@ -206,3 +237,23 @@ class WebFetchTool(Tool):
         except Exception as e:
             logger.error(f"Web fetch error: {e}")
             return json.dumps({"error": str(e), "url": url})
+
+    @classmethod
+    def from_config(cls, config: "Config") -> "WebFetchTool | None":
+        """Create tool instance from configuration.
+
+        Args:
+            config: Global application configuration
+
+        Returns:
+            WebFetchTool instance if web_access is enabled, None otherwise
+        """
+        if not getattr(config.tools, "web_access", False):
+            return None
+
+        web_perms = config.permissions.web_access
+        if not web_perms.get("enabled", False):
+            return None
+
+        max_content_length = web_perms.get("max_content_length", 10000)
+        return cls(max_content_length=max_content_length)

@@ -25,14 +25,17 @@ class Skill(BaseModel):
 class SkillLoader:
     """Loader for Agent Skills in SKILL.md format."""
 
-    def __init__(self, skill_paths: List[str | Path]):
+    def __init__(self, skill_paths: List[str | Path], disabled_skills: List[str] | None = None):
         """Initialize skill loader.
 
         Args:
             skill_paths: List of paths to search for skills
+            disabled_skills: List of skill names to skip loading
         """
         self.skill_paths = [Path(p).expanduser() for p in skill_paths]
+        self.disabled_skills = set(disabled_skills or [])
         self.skills: Dict[str, Skill] = {}
+        self.all_skills: Dict[str, Skill] = {}  # All skills including disabled ones
 
     def load_all_skills(self) -> Dict[str, Skill]:
         """Load all skills from configured paths.
@@ -45,10 +48,10 @@ class SkillLoader:
                 logger.warning(f"Skill path does not exist: {skill_path}")
                 continue
 
-            logger.info(f"Loading skills from: {skill_path}")
+            logger.debug(f"Loading skills from: {skill_path}")
             self._load_skills_from_directory(skill_path)
 
-        logger.info(f"Loaded {len(self.skills)} skills")
+        logger.debug(f"Loaded {len(self.skills)} skills")
         return self.skills
 
     def _load_skills_from_directory(self, directory: Path) -> None:
@@ -64,8 +67,15 @@ class SkillLoader:
             try:
                 skill = self._load_skill_file(skill_file)
                 if skill:
-                    self.skills[skill.name] = skill
-                    logger.debug(f"Loaded skill: {skill.name}")
+                    # Always add to all_skills
+                    self.all_skills[skill.name] = skill
+
+                    # Only add to active skills if not disabled
+                    if skill.name not in self.disabled_skills:
+                        self.skills[skill.name] = skill
+                        logger.debug(f"Loaded skill: {skill.name}")
+                    else:
+                        logger.debug(f"Skipped disabled skill: {skill.name}")
             except Exception as e:
                 logger.error(f"Error loading skill from {skill_file}: {e}")
 
@@ -155,6 +165,37 @@ class SkillLoader:
 
         return results
 
+    def get_all_skills(self) -> Dict[str, Skill]:
+        """Get all skills including disabled ones.
+
+        Returns:
+            Dictionary of all skills
+        """
+        return self.all_skills
+
+    def is_skill_enabled(self, skill_name: str) -> bool:
+        """Check if a skill is enabled.
+
+        Args:
+            skill_name: Name of the skill
+
+        Returns:
+            True if enabled, False if disabled
+        """
+        return skill_name not in self.disabled_skills
+
+    def get_disabled_skills(self) -> set[str]:
+        """Get the set of disabled skill names.
+
+        Returns:
+            Set of disabled skill names
+        """
+        return self.disabled_skills.copy()
+
+
+# Cache for the skills loader to avoid reloading skills multiple times
+_SHARED_SKILLS_LOADER: Optional[SkillLoader] = None
+
 
 def load_default_skills(config: Any) -> SkillLoader:
     """Load skills from default locations.
@@ -165,12 +206,22 @@ def load_default_skills(config: Any) -> SkillLoader:
     3. User global skills - ~/.exobrain/skills
     4. Project-level skills - ./.exobrain/skills (highest priority)
 
+    This function caches the loader to avoid reloading skills multiple times
+    during the same session.
+
     Args:
         config: Application configuration
 
     Returns:
         SkillLoader with loaded skills
     """
+    global _SHARED_SKILLS_LOADER
+
+    # Return cached loader if available
+    if _SHARED_SKILLS_LOADER is not None:
+        logger.debug("Using cached skills loader")
+        return _SHARED_SKILLS_LOADER
+
     skill_paths = []
 
     # 1. Add builtin skills (from submodules) - lowest priority
@@ -185,6 +236,12 @@ def load_default_skills(config: Any) -> SkillLoader:
     if obsidian_skills_path.exists():
         skill_paths.append(obsidian_skills_path)
         logger.debug(f"Added Obsidian skills path: {obsidian_skills_path}")
+
+    # Add ExoBrain specific skills
+    exobrain_skills_path = Path(__file__).parent / "exobrain"
+    if exobrain_skills_path.exists():
+        skill_paths.append(exobrain_skills_path)
+        logger.debug(f"Added ExoBrain skills path: {exobrain_skills_path}")
 
     # 2. Add configured skills directory (if specified in config)
     if hasattr(config, "skills") and hasattr(config.skills, "skills_dir"):
@@ -206,12 +263,30 @@ def load_default_skills(config: Any) -> SkillLoader:
         logger.info(f"Found project-level skills at: {project_skills_path}")
 
     if skill_paths:
-        logger.info(
+        logger.debug(
             f"Skills loading priority (low to high): "
             f"{' > '.join(str(p.name) if p.name != 'skills' else str(p.parent.name) + '/skills' for p in skill_paths)}"
         )
 
-    loader = SkillLoader(skill_paths)
+    # Get disabled skills from config
+    disabled_skills = []
+    if hasattr(config, "skills") and hasattr(config.skills, "disabled_skills"):
+        disabled_skills = config.skills.disabled_skills
+
+    loader = SkillLoader(skill_paths, disabled_skills=disabled_skills)
     loader.load_all_skills()
 
+    # Cache the loader
+    _SHARED_SKILLS_LOADER = loader
+
     return loader
+
+
+def clear_skills_cache() -> None:
+    """Clear the skills loader cache.
+
+    This is useful for testing or when you want to force a reload of skills.
+    """
+    global _SHARED_SKILLS_LOADER
+    _SHARED_SKILLS_LOADER = None
+    logger.debug("Cleared skills loader cache")

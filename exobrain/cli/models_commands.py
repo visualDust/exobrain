@@ -39,13 +39,26 @@ def models_list(ctx: click.Context) -> None:
             "default": "default",
         }.get(source_type, source_type)
 
-        # Build model list with checkmark for current default
+        # Build model list with checkmark for current default and descriptions
         model_lines = []
         for model in available_models:
+            # Get description if available
+            provider_name, model_name = model.split("/", 1)
+            provider_config = config.models.providers.get(provider_name)
+            description = ""
+            if provider_config:
+                description = provider_config.get_model_description(model_name)
+
+            # Format model display
+            model_display = model
+            if description:
+                model_display = f"{model} ({description})"
+
+            # Add checkmark if current default
             if model == config.models.default:
-                model_lines.append(f"[green]✓[/green] {model}")
+                model_lines.append(f"[green]✓[/green] {model_display}")
             else:
-                model_lines.append(f"  {model}")
+                model_lines.append(f"  {model_display}")
 
         title = f"Available Models (current: {config.models.default})"
         if source_type != "default":
@@ -233,43 +246,77 @@ def models_add(ctx: click.Context) -> None:
     )
 
     # Check if provider already exists
+    add_to_existing = False
+    existing_provider_config = None
     if provider_name in config.models.providers:
-        console.print(f"[yellow]Warning: Provider '{provider_name}' already exists.[/yellow]")
-        overwrite = Confirm.ask("Do you want to overwrite it?", default=False)
-        if not overwrite:
+        console.print(f"[yellow]Provider '{provider_name}' already exists.[/yellow]")
+
+        # Show existing provider info
+        existing_provider_config = config.models.providers[provider_name]
+        existing_models = existing_provider_config.get_model_list()
+        console.print(f"[dim]Existing models: {', '.join(existing_models)}[/dim]")
+
+        # Ask if user wants to add models or overwrite
+        console.print("\nWhat would you like to do?")
+        console.print("  1. Add new models to this provider")
+        console.print("  2. Overwrite the entire provider configuration")
+        console.print("  3. Cancel")
+
+        choice = Prompt.ask("Choose an option", choices=["1", "2", "3"], default="1")
+
+        if choice == "3":
             console.print("[yellow]Cancelled.[/yellow]")
             ctx.exit(0)
+        elif choice == "1":
+            add_to_existing = True
+            console.print("[cyan]Will add new models to existing provider.[/cyan]")
+        else:  # choice == "2"
+            console.print("[yellow]Will overwrite existing provider configuration.[/yellow]")
+            add_to_existing = False
 
-    # Step 2: Base URL
-    base_url = Prompt.ask(
-        "Base URL (e.g., https://api.example.com/v1)", default="https://api.openai.com/v1"
-    ).strip()
+    # Step 2: Base URL (skip if adding to existing)
+    if add_to_existing and existing_provider_config:
+        base_url = existing_provider_config.base_url or ""
+        console.print(f"\n[dim]Using existing base URL: {base_url}[/dim]")
+    else:
+        base_url = Prompt.ask(
+            "Base URL (e.g., https://api.example.com/v1)", default="https://api.openai.com/v1"
+        ).strip()
 
-    # Ensure base URL ends properly
-    if not base_url.startswith("http"):
-        console.print("[yellow]Warning: Base URL should start with http:// or https://[/yellow]")
-        base_url = "https://" + base_url
+        # Ensure base URL ends properly
+        if not base_url.startswith("http"):
+            console.print(
+                "[yellow]Warning: Base URL should start with http:// or https://[/yellow]"
+            )
+            base_url = "https://" + base_url
 
-    # Step 3: API Key
-    console.print("\n[bold]Step 2: Authentication[/bold]")
-    console.print("[dim]Tip: Use ${ENV_VAR_NAME} to reference environment variables[/dim]")
+    # Step 3: API Key (skip if adding to existing)
+    if add_to_existing and existing_provider_config:
+        api_key = existing_provider_config.api_key or ""
+        console.print(f"[dim]Using existing API key configuration[/dim]")
+    else:
+        console.print("\n[bold]Step 2: Authentication[/bold]")
+        console.print("[dim]Tip: Use ${ENV_VAR_NAME} to reference environment variables[/dim]")
 
-    api_key = Prompt.ask(
-        f"API key (e.g., ${{CUSTOM_API_KEY}})",
-        default=f"${{{provider_name.upper().replace('-', '_')}_API_KEY}}",
-        password=False,  # Don't hide, as it's often an env var placeholder
-    ).strip()
+        api_key = Prompt.ask(
+            f"API key (e.g., ${{CUSTOM_API_KEY}})",
+            default=f"${{{provider_name.upper().replace('-', '_')}_API_KEY}}",
+            password=False,  # Don't hide, as it's often an env var placeholder
+        ).strip()
 
     # Step 4: Models
-    console.print("\n[bold]Step 3: Model Names[/bold]")
-    console.print("[dim]Enter model names one by one. (e.g. GPT-5)[/dim]")
-    console.print("[dim]Press Enter on an empty line to finish.[/dim]")
+    step_label = "Step 3" if add_to_existing else "Step 3"
+    console.print(f"\n[bold]{step_label}: Model Names[/bold]")
+    console.print(
+        "[dim]Enter model names one by one. You can optionally add a description and default parameters.[/dim]"
+    )
+    console.print("[dim]Press Enter on an empty model name to finish.[/dim]")
 
     models_list = []
     model_num = 1
     while True:
         model_name_input = Prompt.ask(
-            f"Model #{model_num} (or press Enter to finish)", default=""
+            f"Model #{model_num} name (or press Enter to finish)", default=""
         ).strip()
 
         if not model_name_input:
@@ -278,47 +325,81 @@ def models_add(ctx: click.Context) -> None:
                 continue
             break
 
-        models_list.append(model_name_input)
-        console.print(f"  [green]✓[/green] Added: {model_name_input}")
+        # Ask for description (optional)
+        model_description = Prompt.ask(
+            f"  Description for '{model_name_input}' (optional, press Enter to skip)", default=""
+        ).strip()
+
+        # Ask for default parameters (optional)
+        set_model_params = Confirm.ask(
+            f"  Set default parameters for '{model_name_input}'?", default=False
+        )
+
+        model_default_params = {}
+        if set_model_params:
+            temp_input = Prompt.ask("    Temperature (0.0-2.0, or press Enter to skip)", default="")
+            if temp_input.strip():
+                try:
+                    model_default_params["temperature"] = float(temp_input)
+                except ValueError:
+                    console.print("    [yellow]Invalid temperature value, skipping[/yellow]")
+
+            max_tok_input = Prompt.ask("    Max tokens (or press Enter to skip)", default="")
+            if max_tok_input.strip():
+                try:
+                    model_default_params["max_tokens"] = int(max_tok_input)
+                except ValueError:
+                    console.print("    [yellow]Invalid max_tokens value, skipping[/yellow]")
+
+        # Build model entry
+        if model_description or model_default_params:
+            model_entry = {"name": model_name_input}
+            if model_description:
+                model_entry["description"] = model_description
+            if model_default_params:
+                model_entry["default_params"] = model_default_params
+            models_list.append(model_entry)
+
+            # Display confirmation
+            parts = [f"Added: {model_name_input}"]
+            if model_description:
+                parts.append(f"({model_description})")
+            if model_default_params:
+                params_str = ", ".join(f"{k}={v}" for k, v in model_default_params.items())
+                parts.append(f"[{params_str}]")
+            console.print(f"  [green]✓[/green] {' '.join(parts)}")
+        else:
+            models_list.append(model_name_input)
+            console.print(f"  [green]✓[/green] Added: {model_name_input}")
+
         model_num += 1
-
-    # Step 5: Default parameters (optional)
-    console.print("\n[bold]Step 4: Default Parameters (Optional)[/bold]")
-    console.print("[dim]Leave empty to not set a parameter[/dim]")
-    set_defaults = Confirm.ask(
-        "Would you like to set default temperature and/or max_tokens?", default=False
-    )
-
-    default_params = {}
-    if set_defaults:
-        temp_input = Prompt.ask("Temperature (0.0-2.0, or press Enter to skip)", default="")
-        if temp_input.strip():
-            try:
-                default_params["temperature"] = float(temp_input)
-            except ValueError:
-                console.print("[yellow]Invalid temperature value, skipping[/yellow]")
-
-        max_tok_input = Prompt.ask("Max tokens (or press Enter to skip)", default="")
-        if max_tok_input.strip():
-            try:
-                default_params["max_tokens"] = int(max_tok_input)
-            except ValueError:
-                console.print("[yellow]Invalid max_tokens value, skipping[/yellow]")
 
     # Summary
     console.print("\n[bold]Summary:[/bold]")
     console.print(f"  Provider: [cyan]{provider_name}[/cyan]")
-    console.print(f"  Base URL: [cyan]{base_url}[/cyan]")
-    console.print(f"  API Key: [cyan]{api_key}[/cyan]")
-    console.print(f"  Models: [cyan]{', '.join(models_list)}[/cyan]")
+    if not add_to_existing:
+        console.print(f"  Base URL: [cyan]{base_url}[/cyan]")
+        console.print(f"  API Key: [cyan]{api_key}[/cyan]")
 
-    if default_params:
-        if "temperature" in default_params:
-            console.print(f"  Temperature: [cyan]{default_params['temperature']}[/cyan]")
-        if "max_tokens" in default_params:
-            console.print(f"  Max Tokens: [cyan]{default_params['max_tokens']}[/cyan]")
-    else:
-        console.print(f"  Default Params: [dim]None (will use API defaults)[/dim]")
+    # Format models list for display
+    models_display = []
+    for m in models_list:
+        if isinstance(m, str):
+            models_display.append(m)
+        elif isinstance(m, dict):
+            name = m.get("name", "")
+            desc = m.get("description", "")
+            params = m.get("default_params", {})
+
+            parts = [name]
+            if desc:
+                parts.append(f"({desc})")
+            if params:
+                params_str = ", ".join(f"{k}={v}" for k, v in params.items())
+                parts.append(f"[{params_str}]")
+
+            models_display.append(" ".join(parts))
+    console.print(f"  Models: [cyan]{', '.join(models_display)}[/cyan]")
 
     # Confirm
     console.print()
@@ -368,18 +449,44 @@ def models_add(ctx: click.Context) -> None:
     if "providers" not in config_data["models"]:
         config_data["models"]["providers"] = {}
 
-    # Add the new provider
-    provider_config = {
-        "api_key": api_key,
-        "base_url": base_url,
-        "models": models_list,
-    }
+    # Build the provider configuration
+    if add_to_existing and provider_name in config_data["models"]["providers"]:
+        # Merge with existing provider configuration
+        existing_config = config_data["models"]["providers"][provider_name]
 
-    # Only add default_params if it's not empty
-    if default_params:
-        provider_config["default_params"] = default_params
+        # Merge models lists (avoid duplicates by name)
+        existing_models_raw = existing_config.get("models", [])
+        merged_models = list(existing_models_raw)  # Copy existing models
 
-    config_data["models"]["providers"][provider_name] = provider_config
+        # Get existing model names for duplicate check
+        existing_model_names = set()
+        for m in existing_models_raw:
+            if isinstance(m, str):
+                existing_model_names.add(m)
+            elif isinstance(m, dict) and "name" in m:
+                existing_model_names.add(m["name"])
+
+        # Add new models (skip duplicates)
+        for new_model in models_list:
+            model_name = new_model if isinstance(new_model, str) else new_model.get("name")
+            if model_name not in existing_model_names:
+                merged_models.append(new_model)
+            else:
+                console.print(f"[yellow]Skipping duplicate model: {model_name}[/yellow]")
+
+        existing_config["models"] = merged_models
+        console.print(
+            f"[green]Merged {len(models_list)} new model(s) into existing provider.[/green]"
+        )
+    else:
+        # Create new provider configuration
+        provider_config = {
+            "api_key": api_key,
+            "base_url": base_url,
+            "models": models_list,
+        }
+
+        config_data["models"]["providers"][provider_name] = provider_config
 
     # Save config
     with open(config_path, "w", encoding="utf-8") as f:
@@ -393,12 +500,22 @@ def models_add(ctx: click.Context) -> None:
 
     # Show success message
     console.print()
+
+    # Format model names for display
+    model_names = []
+    for m in models_list:
+        if isinstance(m, str):
+            model_names.append(m)
+        elif isinstance(m, dict):
+            model_names.append(m.get("name", ""))
+
+    action_text = "merged successfully" if add_to_existing else "added successfully"
     console.print(
         Panel.fit(
-            f"[green]✓ Provider '{provider_name}' added successfully![/green]\n\n"
+            f"[green]✓ Provider '{provider_name}' {action_text}![/green]\n\n"
             f"Config file: [cyan]{config_path}[/cyan]\n\n"
             f"Available models:\n"
-            + "\n".join(f"  • {provider_name}/{model}" for model in models_list),
+            + "\n".join(f"  • {provider_name}/{model}" for model in model_names),
             title="[bold green]Success[/bold green]",
             border_style="green",
         )

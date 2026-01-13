@@ -1,8 +1,19 @@
+# project specific
+config.yaml
+.ignored
+.exobrain/
+*.db
+*.sqlite
+chroma_db/
+models/
+logs/
+cache/
+.claude/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-config.yaml
 
 # C extensions
 *.so
@@ -136,16 +147,6 @@ poetry.lock
 # OS
 .DS_Store
 Thumbs.db
-
-# ExoBrain specific
-.exobrain/
-*.db
-*.sqlite
-chroma_db/
-models/
-logs/
-cache/
-exobrain/skills/anthropic/
 
 # Secrets
 *.key

@@ -1,4 +1,4 @@
-version: "0.1.1" # ExoBrain version, auto-updated during init
+version: "0.2.0" # ExoBrain version, auto-updated during init
 models:
   default: openai/gpt-5-mini
   providers:
@@ -62,7 +62,7 @@ permissions:
     network_access: true
   shell_execution:
     enabled: true
-    timeout: 30
+    timeout: 600 # Default timeout in seconds (10 minutes). Can be overridden per command.
     allowed_directories:
       - ~/repos
       - ~/Documents
@@ -144,9 +144,6 @@ permissions:
 skills:
   enabled: true
   skills_dir: ~/.exobrain/skills
-  builtin_skills:
-    - note_manager
-  auto_load: true
 mcp:
   enabled: true
   servers: []
@@ -163,35 +160,26 @@ memory:
   long_term:
     enabled: true
     storage_path: ~/.exobrain/data/conversations
-    auto_save_interval: 60
   working:
     max_items: 20
   save_tool_history: true # Save tool execution results to conversation history
   tool_content_max_length: 500 # Maximum length of tool message content to save (characters)
+
+  # Message handler configuration
+  message_handler:
+    type: "truncating" # Handler type: truncating, sliding_window (future), compressing (future), hybrid (future)
+
+    # Truncating handler options
+    truncating:
+      load_percentage: 0.5 # Use 50% of available context for history (0.0-1.0)
+      reserved_output_tokens: 4096 # Reserve tokens for model output
 cli:
   theme: auto
-  show_timestamps: false
   show_token_usage: true
-  syntax_highlighting: true
   render_markdown: true
 logging:
-  level: INFO
+  level: INFO # can be CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET. Refer to Python Logging levels.
   file: ~/.exobrain/logs/exobrain.log
   rotate: true
   max_size: 10485760
-  backup_count: 5
   format: "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"
-  audit:
-    enabled: true
-    file: ~/.exobrain/logs/audit.log
-performance:
-  cache:
-    enabled: true
-    ttl: 3600
-    max_size: 250
-  concurrency:
-    max_concurrent_requests: 5
-    max_concurrent_tools: 3
-  background_tasks:
-    enabled: true
-    max_workers: 3

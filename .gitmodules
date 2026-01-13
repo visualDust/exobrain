@@ -1,6 +1,6 @@
 [submodule "exobrain/skills/anthropic"]
-    path = exobrain/skills/anthropic
-    url = https://github.com/anthropics/skills.git
+	path = exobrain/skills/anthropic
+	url = https://github.com/anthropics/skills.git
 [submodule "exobrain/skills/obsidian"]
 	path = exobrain/skills/obsidian
 	url = https://github.com/kepano/obsidian-skills.git

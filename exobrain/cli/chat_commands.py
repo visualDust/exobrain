@@ -11,9 +11,10 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
 
-from exobrain.agent.core import Agent
+from exobrain.agent.base import Agent
 from exobrain.cli.chat_permissions import request_permission, update_permission
 from exobrain.cli.chat_ui import CLIStatusHandler, ToolCallDisplay
+from exobrain.cli.util import create_agent_from_config
 from exobrain.config import Config
 
 console = Console()
@@ -112,7 +113,11 @@ def _extract_tool_events(
 
 
 async def run_streaming_chat(
-    agent: Agent, user_input: str, console: Console, render_markdown: bool = False
+    agent: Agent,
+    user_input: str,
+    console: Console,
+    status_handler: "CLIStatusHandler | None" = None,
+    render_markdown: bool = False,
 ) -> None:
     """Run streaming chat with enhanced UI.
 
@@ -120,6 +125,7 @@ async def run_streaming_chat(
         agent: The agent instance
         user_input: User's message
         console: Rich console for output
+        status_handler: Optional status handler for managing live display
         render_markdown: Whether to render the final assistant reply as Markdown
     """
     # Buffer for collecting tool output
@@ -128,17 +134,7 @@ async def run_streaming_chat(
     in_tool_section = False
     assistant_response = ""
 
-    # Clear the "(generating...)" indicator and start output
-    console.print("\r[bold cyan]Assistant[/bold cyan] [dim](thinking...)[/dim]")
     live: Live | None = None
-
-    # Temporarily disable status handler's live display if using markdown
-    status_handler = agent.status_callback if hasattr(agent, "status_callback") else None
-    original_ensure_display = None
-    if render_markdown and status_handler and hasattr(status_handler, "_ensure_display"):
-        # Save original method and replace with no-op to prevent live display conflicts
-        original_ensure_display = status_handler._ensure_display
-        status_handler._ensure_display = lambda: None
 
     if render_markdown:
         live = Live(Markdown(""), console=console, refresh_per_second=8, transient=False)
@@ -243,10 +239,6 @@ async def run_streaming_chat(
         if assistant_response:
             console.print()
             console.print("[dim]✓ Response complete[/dim]")
-
-    # Restore original _ensure_display method if we replaced it
-    if original_ensure_display and status_handler:
-        status_handler._ensure_display = original_ensure_display
 
 
 async def run_chat_session(
@@ -518,7 +510,10 @@ async def run_chat_session(
     # Create status handler first
     status_handler = CLIStatusHandler(console)
 
-    # Setup permission callback
+    # Register event listeners
+    agent.events.register(status_handler.handle_event)
+
+    # Setup permission handler
     async def permission_handler(denied_info: dict[str, Any]) -> bool:
         """Handle permission requests from agent."""
         # Stop live display to avoid interfering with user input
@@ -532,9 +527,7 @@ async def run_chat_session(
 
         return granted
 
-    agent.permission_callback = permission_handler
-    # Share status updates with the TUI
-    agent.status_callback = status_handler
+    agent.permission_handler = permission_handler
 
     while True:
         try:
@@ -608,9 +601,6 @@ async def run_chat_session(
             # Track history length before processing
             history_len_before = len(agent.conversation_history)
 
-            # Show assistant header and processing indicator
-            console.print("\n[bold cyan]Assistant[/bold cyan] [dim](thinking...)[/dim]")
-
             # Process message with agent
             if agent.stream:
                 # Streaming mode with enhanced UI
@@ -618,13 +608,11 @@ async def run_chat_session(
                     agent,
                     user_input,
                     console,
+                    status_handler=status_handler,
                     render_markdown=config.cli.render_markdown,
                 )
             else:
                 # Non-streaming mode
-                # Clear the "(generating...)" indicator
-                console.print("\r[bold cyan]Assistant[/bold cyan] [dim](thinking...)[/dim]")
-
                 response = await agent.process_message(user_input)
 
                 if config.cli.render_markdown and response:
@@ -680,7 +668,7 @@ async def run_chat_session(
             # Show token usage if enabled
             if config.cli.show_token_usage:
                 # This would need to be implemented in the agent
-                pass
+                pass  # todo))
 
         except KeyboardInterrupt:
             console.print("\n[yellow]Input cancelled. Type /exit or press Ctrl+D to quit.[/yellow]")
@@ -707,7 +695,7 @@ async def run_tui_chat_session(
     """
     from pathlib import Path
 
-    from exobrain.cli.tui.app import ChatApp, ChatAppCallbacks, ChatAppConfig
+    from exobrain.cli.tui.chat.app import ChatApp, ChatAppCallbacks, ChatAppConfig
     from exobrain.memory.conversations import ConversationManager
     from exobrain.memory.loader import TokenBudgetCalculator, format_load_stats
     from exobrain.providers.base import Message
@@ -871,7 +859,7 @@ async def run_tui_chat_session(
     # Store skills manager for header counts
     app._skills_manager = skills_manager
 
-    # Setup permission callback now that the app exists
+    # Setup permission handler now that the app exists
     async def permission_handler(denied_info: dict[str, Any]) -> bool:
         """Handle permission requests from agent using the TUI modal."""
         granted, scope = await app.request_permission(denied_info)
@@ -881,8 +869,10 @@ async def run_tui_chat_session(
 
         return granted
 
-    agent.permission_callback = permission_handler
-    agent.status_callback = app.handle_agent_status
+    agent.permission_handler = permission_handler
+
+    # Register TUI event handler
+    agent.events.register(app.handle_agent_event)
 
     # Callback to save messages
     def on_message(
@@ -944,6 +934,10 @@ async def run_tui_chat_session(
 @click.option("--no-stream", is_flag=True, help="Disable streaming")
 @click.option("--no-skills", is_flag=True, help="Disable skills")
 @click.option(
+    "--constitution",
+    help="Constitution file to use (overrides config)",
+)
+@click.option(
     "-c",
     "--continue",
     "continue_session",
@@ -985,6 +979,7 @@ def chat(
     model: str | None,
     no_stream: bool,
     no_skills: bool,
+    constitution: str | None,
     continue_session: bool,
     session_id: str | None,
     new_session: bool,
@@ -1012,7 +1007,9 @@ def chat(
 
     try:
         # Create agent
-        agent, skills_manager = create_agent_from_config(config, model, enable_skills=not no_skills)
+        agent, skills_manager = create_agent_from_config(
+            config, model, constitution_file=constitution
+        )
 
         # Validate storage options
         if use_project and use_global:
@@ -1047,6 +1044,10 @@ def chat(
     help="Model to use (e.g., openai/gpt-4o, gemini/gemini-pro, local/Qwen3-30B)",
 )
 @click.option("--no-skills", is_flag=True, help="Disable skills")
+@click.option(
+    "--constitution",
+    help="Constitution file to use (overrides config)",
+)
 @click.option("--verbose", "-v", is_flag=True, help="Show detailed tool execution info")
 @click.pass_context
 def ask(
@@ -1054,6 +1055,7 @@ def ask(
     query: str,
     model: str | None,
     no_skills: bool,
+    constitution: str | None,
     verbose: bool,
 ) -> None:
     """Ask a single question.
@@ -1067,7 +1069,9 @@ def ask(
 
     try:
         # Create agent
-        agent, skills_manager = create_agent_from_config(config, model, enable_skills=not no_skills)
+        agent, skills_manager = create_agent_from_config(
+            config, model, constitution_file=constitution
+        )
 
         # Set verbose mode if requested
         agent.verbose = verbose
@@ -1096,7 +1100,7 @@ def ask(
 
             return granted
 
-        agent.permission_callback = permission_handler
+        agent.permission_handler = permission_handler
 
         # Process query
         async def process() -> None:

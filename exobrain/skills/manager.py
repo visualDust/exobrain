@@ -4,10 +4,12 @@ import logging
 from typing import List, Optional
 
 from exobrain.skills.loader import Skill
+from exobrain.utils.mvc import singleton
 
 logger = logging.getLogger(__name__)
 
 
+@singleton
 class SkillsManager:
     """Manager for selecting and applying skills to agents."""
 

@@ -3,13 +3,19 @@
 import ast
 import math
 import operator
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
-from exobrain.tools.base import Tool, ToolParameter
+from exobrain.tools.base import ConfigurableTool, ToolParameter, register_tool
+
+if TYPE_CHECKING:
+    from exobrain.config import Config
 
 
-class MathEvaluateTool(Tool):
+@register_tool
+class MathEvaluateTool(ConfigurableTool):
     """Safely evaluate mathematical expressions."""
+
+    config_key: ClassVar[str] = ""  # Always enabled, no configuration needed
 
     def __init__(self) -> None:
         super().__init__(
@@ -183,3 +189,17 @@ class MathEvaluateTool(Tool):
             return f"Result: {result}"
         except Exception as exc:
             return f"Error evaluating expression: {exc}"
+
+    @classmethod
+    def from_config(cls, config: "Config") -> "MathEvaluateTool":
+        """Create tool instance from configuration.
+
+        Math tool is always enabled and requires no configuration.
+
+        Args:
+            config: Global application configuration (unused)
+
+        Returns:
+            MathEvaluateTool instance
+        """
+        return cls()

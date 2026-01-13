@@ -1,19 +1,26 @@
 """Shell execution tools for ExoBrain."""
 
 import asyncio
+import getpass
 import logging
 import platform
 import re
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from exobrain.tools.base import Tool, ToolParameter
+from exobrain.tools.base import ConfigurableTool, ToolParameter, register_tool
+
+if TYPE_CHECKING:
+    from exobrain.config import Config
 
 logger = logging.getLogger(__name__)
 
 
-class ShellExecuteTool(Tool):
+@register_tool
+class ShellExecuteTool(ConfigurableTool):
     """Tool to execute shell commands with permission checks."""
+
+    config_key: ClassVar[str] = "shell_execution"
 
     def __init__(
         self,
@@ -35,6 +42,11 @@ class ShellExecuteTool(Tool):
                 "working_directory": ToolParameter(
                     type="string",
                     description="The directory to execute the command in (default: current directory)",
+                    required=False,
+                ),
+                "timeout": ToolParameter(
+                    type="integer",
+                    description="Timeout in seconds for command execution (default: value from config)",
                     required=False,
                 ),
             },
@@ -151,13 +163,14 @@ class ShellExecuteTool(Tool):
         """Execute shell command.
 
         Args:
-            **kwargs: Tool parameters including 'command' and 'working_directory'
+            **kwargs: Tool parameters including 'command', 'working_directory', and 'timeout'
 
         Returns:
             Command output or error message
         """
         command = kwargs.get("command", "")
         working_directory = kwargs.get("working_directory", ".")
+        timeout = kwargs.get("timeout", self._timeout)
 
         if not command:
             return "Error: command parameter is required"
@@ -196,12 +209,12 @@ class ShellExecuteTool(Tool):
             try:
                 stdout, stderr = await asyncio.wait_for(
                     process.communicate(),
-                    timeout=self._timeout,
+                    timeout=timeout,
                 )
             except asyncio.TimeoutError:
                 process.kill()
                 await process.wait()
-                return f"Error: command timed out after {self._timeout} seconds"
+                return f"Error: command timed out after {timeout} seconds"
 
             # Decode output
             stdout_text = stdout.decode("utf-8", errors="replace").strip()
@@ -229,9 +242,45 @@ class ShellExecuteTool(Tool):
             logger.error(f"Error executing command: {e}")
             return f"Error executing command: {e}"
 
+    @classmethod
+    def from_config(cls, config: "Config") -> "ShellExecuteTool | None":
+        """Create tool instance from configuration.
 
-class GetOSInfoTool(Tool):
+        Args:
+            config: Global application configuration
+
+        Returns:
+            ShellExecuteTool instance if shell_execution is enabled, None otherwise
+        """
+        # Check if shell execution is enabled
+        if not getattr(config.tools, "shell_execution", False):
+            return None
+
+        shell_perms = config.permissions.shell_execution
+        if not shell_perms.get("enabled", False):
+            return None
+
+        # Extract configuration
+        allowed_dirs = shell_perms.get("allowed_directories") or []
+        denied_dirs = shell_perms.get("denied_directories") or []
+        allowed_cmds = shell_perms.get("allowed_commands") or []
+        denied_cmds = shell_perms.get("denied_commands") or []
+        timeout = shell_perms.get("timeout", 30)
+
+        return cls(
+            allowed_directories=allowed_dirs,
+            denied_directories=denied_dirs,
+            allowed_commands=allowed_cmds,
+            denied_commands=denied_cmds,
+            timeout=timeout,
+        )
+
+
+@register_tool
+class GetOSInfoTool(ConfigurableTool):
     """Tool to get information about the current operating system."""
+
+    config_key: ClassVar[str] = ""  # Always enabled, no configuration needed
 
     def __init__(self) -> None:
         super().__init__(
@@ -279,3 +328,71 @@ class GetOSInfoTool(Tool):
         except Exception as e:
             logger.error(f"Error getting OS information: {e}")
             return f"Error getting OS information: {e}"
+
+    @classmethod
+    def from_config(cls, config: "Config") -> "GetOSInfoTool":
+        """Create tool instance from configuration.
+
+        OS info tool is always enabled and requires no configuration.
+
+        Args:
+            config: Global application configuration (unused)
+
+        Returns:
+            GetOSInfoTool instance
+        """
+        return cls()
+
+
+@register_tool
+class GetUserInfoTool(ConfigurableTool):
+    """Tool to get information about the current user and home directory."""
+
+    config_key: ClassVar[str] = ""  # Always enabled, no configuration needed
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="get_user_info",
+            description="Get information about the current user including username and home directory path. Use this to determine the user's identity and home folder location.",
+            parameters={},
+            requires_permission=False,
+        )
+
+    async def execute(self, **kwargs: Any) -> str:  # noqa: ARG002
+        """Get user information.
+
+        Returns:
+            User information including username and home directory path
+        """
+        try:
+            # Get username
+            username = getpass.getuser()
+
+            # Get home directory
+            home_dir = Path.home()
+
+            # Gather user information
+            info_parts = [
+                f"Username: {username}",
+                f"Home Directory: {home_dir}",
+            ]
+
+            return "\n".join(info_parts)
+
+        except Exception as e:
+            logger.error(f"Error getting user information: {e}")
+            return f"Error getting user information: {e}"
+
+    @classmethod
+    def from_config(cls, config: "Config") -> "GetUserInfoTool":
+        """Create tool instance from configuration.
+
+        User info tool is always enabled and requires no configuration.
+
+        Args:
+            config: Global application configuration (unused)
+
+        Returns:
+            GetUserInfoTool instance
+        """
+        return cls()

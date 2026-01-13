@@ -5,7 +5,7 @@ from typing import Any
 from exobrain.providers.openai_provider import OpenAIProvider
 
 
-class LocalModelProvider(OpenAIProvider):
+class OpenAICompatibleModelProvider(OpenAIProvider):
     """Local model provider using OpenAI-compatible API (e.g., vLLM, Ollama)."""
 
     def __init__(
@@ -46,19 +46,12 @@ class LocalModelProvider(OpenAIProvider):
 
     def supports_tool_calling(self) -> bool:
         """Tool calling support depends on the local model."""
-        # Some models support it, but we'll default to False
+        # Some models support it, default to False
         # This can be configured per model
         return True
 
     def get_context_window(self) -> int:
         """Get context window size for local models."""
-        # Common context windows for popular local models
-        if "qwen" in self.model.lower():
-            return 32768
-        elif "llama" in self.model.lower():
-            return 8192
-        elif "mistral" in self.model.lower():
-            return 8192
 
         # Default
-        return 8192
+        return 32768

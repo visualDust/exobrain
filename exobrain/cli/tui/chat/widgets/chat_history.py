@@ -6,7 +6,7 @@ from typing import Literal
 
 from textual.containers import VerticalScroll
 
-from exobrain.cli.tui.widgets.message import MessageWidget, StreamingMessage
+from exobrain.cli.tui.chat.widgets.message import MessageWidget, StreamingMessage
 
 
 class ChatHistory(VerticalScroll):

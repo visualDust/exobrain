@@ -1,496 +1,335 @@
-# ExoBrain Tools Design Guide
+# ExoBrain Tools System
 
-This document explains the design standards of the ExoBrain tool system to help developers extend and add new tools.
+This document describes the ExoBrain tools system and how to add new tools.
 
-## Core Architecture
+## Overview
 
-### 1. Base Classes
+ExoBrain uses an automatic tool registration system where tools register themselves via decorators and are instantiated based on configuration. The system consists of:
 
-**`base.py`** provides the core components of the tool system:
+- **ToolRegistry**: A registry that manages both tool classes (global) and tool instances (per-agent)
+- **ConfigurableTool**: Base class for tools that can be auto-registered and configured
+- **@register_tool**: Decorator for automatic tool discovery
+- **from_config()**: Class method for configuration-based instantiation
 
-- **`ToolParameter`** - Tool parameter definition
-- **`Tool`** - Base class for all tools (Pydantic BaseModel)
-- **`ToolRegistry`** - Tool registration and management
+## Tool Initialization Flow
 
-### 2. Existing Tool Modules
+1. **Registration Phase** (at import time):
 
-```
-tools/
-├── base.py              # Base classes and tool registry
-├── file_tools.py        # File system operations
-├── shell_tools.py       # Shell command execution
-├── time_tools.py        # Time-related tools
-├── web_tools.py         # Web search and fetching
-├── math_tools.py        # Mathematical evaluation
-├── skill_tools.py       # Skill management
-├── location_tools.py    # Location services
-├── context7_tools.py    # Context7 integration
-└── README.md            # This document
-```
+   - Tool modules are imported via `import exobrain.tools`
+   - `@register_tool` decorator registers each tool class to `ToolRegistry._tool_classes`
+   - Tools are grouped by `config_key` (e.g., "file_system", "web_access", "skills")
 
-## Creating New Tools: Standard Process
+2. **Instantiation Phase** (at agent creation):
 
-### Step 1: Define the Tool Class
+   - `auto_register_tools()` is called with the config
+   - For each registered tool class, `from_config(config)` is called
+   - Tool decides whether to enable itself based on config
+   - If enabled, tool instance is registered to `ToolRegistry._tool_instances`
 
-Inherit from the `Tool` base class and follow this pattern:
+3. **Agent Usage**:
+   - Agent receives the ToolRegistry and can access all registered tools
+   - Tools can execute with permission checks if required
+
+## Creating a New Tool
+
+### Step 1: Define Tool Class
+
+Create a new tool class that inherits from `ConfigurableTool`:
 
 ```python
-from exobrain.tools.base import Tool, ToolParameter
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
+from exobrain.tools.base import ConfigurableTool, ToolParameter, register_tool
 
+if TYPE_CHECKING:
+    from exobrain.config import Config
 
-class MyNewTool(Tool):
-    """Brief description of the tool (for Agent understanding)."""
+@register_tool
+class MyTool(ConfigurableTool):
+    """My custom tool description."""
 
-    def __init__(self, config_param1: str, config_param2: int) -> None:
-        # 1. Call super().__init__() first (Pydantic requirement)
+    # Configuration key - used to group tools and check config
+    # Use "" for always-enabled tools
+    config_key: ClassVar[str] = "my_category"
+
+    def __init__(self, param1: str, param2: int = 10):
+        """Initialize the tool with configuration parameters."""
         super().__init__(
-            name="my_new_tool",  # Unique tool identifier (snake_case)
-            description="Detailed description of tool functionality and use cases",  # Agent reads this
+            name="my_tool",
+            description="What this tool does",
             parameters={
-                "param1": ToolParameter(
-                    type="string",  # string, integer, boolean, array, object
-                    description="Description of parameter 1",
+                "input": ToolParameter(
+                    type="string",
+                    description="Input parameter description",
                     required=True,
                 ),
-                "param2": ToolParameter(
-                    type="integer",
-                    description="Description of parameter 2",
-                    required=False,
-                ),
             },
-            requires_permission=True,  # Whether permission check is needed
-            permission_scope="my_scope",  # Permission scope identifier
+            requires_permission=True,  # Set to True if tool needs permission
+            permission_scope="my_category",  # Permission scope name
         )
+        self._param1 = param1
+        self._param2 = param2
+```
 
-        # 2. Set private attributes after super().__init__()
-        self._config_param1 = config_param1
-        self._config_param2 = config_param2
+### Step 2: Implement execute() Method
 
+```python
     async def execute(self, **kwargs: Any) -> str:
-        """Execute tool logic.
+        """Execute the tool.
 
         Args:
-            **kwargs: Parameters passed from Agent (corresponding to parameters definition)
+            **kwargs: Tool parameters
 
         Returns:
-            str: Tool execution result (returned to Agent)
+            Tool execution result as string
         """
-        # 3. Extract parameters from kwargs
-        param1 = kwargs.get("param1", "")
-        param2 = kwargs.get("param2", 0)
+        input_value = kwargs.get("input", "")
 
-        # 4. Parameter validation
-        if not param1:
-            return "Error: param1 is required"
+        # Tool logic here
+        result = f"Processed: {input_value} with {self._param1}"
 
-        # 5. Execute tool logic
-        try:
-            result = await self._do_work(param1, param2)
-            return result
-        except Exception as e:
-            return f"Error: {e}"
-
-    async def _do_work(self, param1: str, param2: int) -> str:
-        """Private method: actual work logic."""
-        # Implement specific logic
-        pass
+        return result
 ```
 
-### Step 2: Implement Permission Checks (Optional)
-
-If the tool requires permission control:
+### Step 3: Implement from_config() Class Method
 
 ```python
-from pathlib import Path
+    @classmethod
+    def from_config(cls, config: "Config") -> "MyTool | None":
+        """Create tool instance from configuration.
 
-class SecureFileTool(Tool):
-    def __init__(self, allowed_paths: list[str], denied_paths: list[str]) -> None:
-        super().__init__(
-            name="secure_file_tool",
-            description="A file tool with permission checks",
-            parameters={...},
-            requires_permission=True,
-            permission_scope="file_system",
-        )
-
-        # Resolve paths to absolute paths
-        self._allowed_paths = [Path(p).expanduser().resolve() for p in allowed_paths]
-        self._denied_paths = [Path(p).expanduser().resolve() for p in denied_paths]
-
-    def _check_permission(self, path: Path) -> tuple[bool, str]:
-        """Check path permissions.
+        Args:
+            config: Global application configuration
 
         Returns:
-            tuple[bool, str]: (is_allowed, error_message)
+            Tool instance if enabled in config, None otherwise
         """
-        path = path.expanduser().resolve()
+        # Check if this tool category is enabled
+        if not getattr(config.tools, "my_category", False):
+            return None
 
-        # Check denied list first (higher priority)
-        for denied in self._denied_paths:
-            try:
-                path.relative_to(denied)
-                return False, f"Access denied: path is in blocked directory {denied}"
-            except ValueError:
-                continue
+        # Get tool-specific configuration
+        tool_config = config.permissions.my_category
+        if not tool_config.get("enabled", False):
+            return None
 
-        # Then check allowed list
-        for allowed in self._allowed_paths:
-            try:
-                path.relative_to(allowed)
-                return True, ""
-            except ValueError:
-                continue
+        # Extract parameters from config
+        param1 = tool_config.get("param1", "default")
+        param2 = tool_config.get("param2", 10)
 
-        return False, f"Access denied: path not in allowed list"
-
-    async def execute(self, **kwargs: Any) -> str:
-        path_str = kwargs.get("path", "")
-        path = Path(path_str)
-
-        # Permission check
-        allowed, message = self._check_permission(path)
-        if not allowed:
-            return message
-
-        # Continue execution...
+        return cls(param1=param1, param2=param2)
 ```
 
-### Step 3: Register to CLI
+## Existing Tools
 
-Register the tool in `cli/__init__.py`:
+Tools are organized by `config_key` in the configuration file
 
-```python
-from exobrain.tools.my_new_tool import MyNewTool
+### Always-Enabled Tools (`config_key = ""`)
 
-def create_agent_from_config(config: Config, ...) -> tuple[Agent, Any]:
-    # ...
-    tool_registry = ToolRegistry()
+- **MathEvaluateTool**: Evaluate mathematical expressions
+- **GetOSInfoTool**: Get operating system information
+- **GetUserInfoTool**: Get current user information
 
-    # Register new tool
-    if config.tools.my_feature:  # Check if enabled in config
-        # Get parameters from config
-        my_config = config.permissions.my_scope
-        param1 = my_config.get("param1", "default")
-        param2 = my_config.get("param2", 42)
+These tools don't require configuration and are always available.
 
-        # Register tool instance
-        tool_registry.register(MyNewTool(param1, param2))
-```
+### File System Tools (`config_key = "file_system"`)
 
-### Step 4: Add Configuration
+- **ReadFileTool**: Read file contents
+- **WriteFileTool**: Write content to files
+- **ListDirectoryTool**: List directory contents
+- **SearchFilesTool**: Search for files by pattern
+- **EditFileTool**: Edit file contents
+- **GrepFileTool**: Search file contents with regex
 
-Add configuration support in `config.py`:
+### Web Access Tools (`config_key = "web_access"`)
 
-```python
-class ToolsConfig(BaseModel):
-    # ...
-    my_feature: bool = False  # Toggle for new tool
+- **WebSearchTool**: Search the web using DuckDuckGo
+- **WebFetchTool**: Fetch and extract text from web pages
+- **Context7SearchTool**: Search using Context7 API
 
-class PermissionsConfig(BaseModel):
-    # ...
-    my_scope: dict[str, Any] = Field(default_factory=dict)  # Permission config for new tool
-```
+### Shell Execution Tools (`config_key = "shell_execution"`)
 
-Add configuration examples in `config.yaml` and `config.example.yaml`:
+- **ShellExecuteTool**: Execute shell commands with permission checks
+
+### Time Management Tools (`config_key = "time_management"`)
+
+- **GetCurrentTimeTool**: Get current date and time
+- **GetWorldTimeTool**: Get time for specific timezone
+
+### Location Tools (`config_key = "location"`)
+
+- **GetUserLocationTool**: Get user's location information
+
+### Skill Tools (`config_key = "skills"`)
+
+- **GetSkillTool**: Retrieve detailed skill instructions
+- **SearchSkillsTool**: Search for skills by query
+- **ListSkillsTool**: List all available skills
+
+Skill tools are special - they initialize their own `SkillsManager` in `from_config()`.
+
+## Tool Configuration
+
+Tools read their configuration from two places:
+
+1. **`config.tools.<config_key>`**: Boolean flag to enable/disable the tool category
+2. **`config.permissions.<config_key>`**: Detailed configuration including:
+   - `enabled`: Whether the tool is enabled
+   - Tool-specific parameters (e.g., `max_results`, `timeout`, `allowed_directories`)
+
+Example configuration:
 
 ```yaml
 tools:
-  my_feature: true
+  web_access: true
+  file_system: true
 
 permissions:
-  my_scope:
+  web_access:
     enabled: true
-    param1: "value"
-    param2: 42
+    max_results: 5
+    max_content_length: 10000
+
+  file_system:
+    enabled: true
+    allowed_directories:
+      - "/home/user/projects"
 ```
 
-## Design Principles
+## Permission System
 
-### ✅ Must Follow
-
-1. **Call `super().__init__()` first, then set private attributes**
-
-   ```python
-   # ✅ Correct
-   super().__init__(name="tool", ...)
-   self._config = config
-
-   # ❌ Wrong - Pydantic will error
-   self._config = config
-   super().__init__(name="tool", ...)
-   ```
-
-2. **`execute()` must use `**kwargs`\*\*
-
-   ```python
-   # ✅ Correct
-   async def execute(self, **kwargs: Any) -> str:
-       param = kwargs.get("param", "")
-
-   # ❌ Wrong - Agent calls will fail
-   async def execute(self, param: str) -> str:
-       ...
-   ```
-
-3. **Always return strings**
-
-   ```python
-   # ✅ Correct
-   return "Success: file created"
-   return json.dumps({"status": "ok", "data": result})
-
-   # ❌ Wrong - Inconsistent return types
-   return True
-   return {"status": "ok"}
-   ```
-
-4. **Clear error handling**
-
-   ```python
-   # ✅ Correct - Return error messages
-   if not valid:
-       return "Error: invalid parameter"
-
-   try:
-       result = risky_operation()
-   except Exception as e:
-       return f"Error: {e}"
-
-   # ❌ Wrong - Raising exceptions interrupts Agent
-   raise ValueError("Invalid parameter")
-   ```
-
-5. **Detailed, Agent-oriented descriptions**
-
-   ```python
-   # ✅ Correct - Agent understands when to use it
-   description="Search the web for information. Use this when you need current data or answers requiring up-to-date knowledge."
-
-   # ❌ Wrong - Too brief, Agent might misuse
-   description="Search"
-   ```
-
-### 🎯 Best Practices
-
-1. **Naming Conventions**
-
-   - Tool name: `snake_case` (e.g., `web_search`, `list_directory`)
-   - Class name: `PascalCase` + `Tool` suffix (e.g., `WebSearchTool`)
-   - File name: `snake_case` + `_tools.py` (e.g., `web_tools.py`)
-
-2. **Permission Priority**
-
-   - Denied list > Allowed list
-   - Check denied list first, then allowed list
-
-3. **Output Formatting**
-
-   ```python
-   # User-friendly output
-   result = [
-       f"Command: {command}",
-       f"Working directory: {work_dir}",
-       f"Exit code: {exit_code}",
-       "",
-       "--- Output ---",
-       output,
-   ]
-   return "\n".join(result)
-   ```
-
-4. **Async First**
-
-   - Use `async/await` for all I/O operations
-   - Use async libraries like `aiofiles`, `httpx.AsyncClient`
-
-5. **Logging**
-
-   ```python
-   import logging
-   logger = logging.getLogger(__name__)
-
-   async def execute(self, **kwargs: Any) -> str:
-       logger.info(f"Executing tool with params: {kwargs}")
-       try:
-           result = await self._do_work()
-           logger.debug(f"Tool result: {result[:100]}")
-           return result
-       except Exception as e:
-           logger.error(f"Tool error: {e}")
-           return f"Error: {e}"
-   ```
-
-## Tool Type Examples
-
-### 1. Simple Tool (No Permission Checks)
+Tools can require permission by setting:
 
 ```python
-class GetCurrentTimeTool(Tool):
-    """Get current time - no permission needed."""
-
-    def __init__(self) -> None:
-        super().__init__(
-            name="get_current_time",
-            description="Get the current date and time",
-            parameters={},  # No parameters
-            requires_permission=False,
-        )
-
-    async def execute(self, **kwargs: Any) -> str:
-        from datetime import datetime
-        now = datetime.now()
-        return f"Current time: {now.strftime('%Y-%m-%d %H:%M:%S')}"
+super().__init__(
+    # ...
+    requires_permission=True,
+    permission_scope="my_category",
+)
 ```
 
-### 2. Tool with Permission Checks
+When a tool requires permission:
 
-See implementation in `file_tools.py`.
+- The agent will prompt the user before executing
+- Users can grant permission for the session or permanently
+- Permission is checked against the `permission_scope`
 
-### 3. Tool with Configuration Parameters
+## Best Practices
+
+1. **Single Responsibility**: Each tool should do one thing well
+2. **Clear Descriptions**: Write clear tool and parameter descriptions for the LLM
+3. **Error Handling**: Return error messages as strings, don't raise exceptions
+4. **Configuration**: Use `from_config()` to read configuration and decide if the tool should be enabled
+5. **Type Hints**: Use proper type hints for better IDE support
+6. **Permissions**: Set `requires_permission=True` for tools that access external resources
+7. **Testing**: Test both enabled and disabled states in `from_config()`
+
+## Example: Complete Tool Implementation
 
 ```python
-class WebSearchTool(Tool):
-    """Web search tool - requires configuration for max results."""
+"""Example tool for demonstration."""
 
-    def __init__(self, max_results: int = 5) -> None:
+from typing import TYPE_CHECKING, Any, ClassVar
+from exobrain.tools.base import ConfigurableTool, ToolParameter, register_tool
+
+if TYPE_CHECKING:
+    from exobrain.config import Config
+
+
+@register_tool
+class ExampleTool(ConfigurableTool):
+    """Example tool that demonstrates the pattern."""
+
+    config_key: ClassVar[str] = "example"
+
+    def __init__(self, api_key: str, timeout: int = 30):
         super().__init__(
-            name="web_search",
-            description="Search the web for information",
+            name="example_tool",
+            description="An example tool that calls an API",
             parameters={
                 "query": ToolParameter(
                     type="string",
-                    description="The search query",
+                    description="The query to search for",
                     required=True,
+                ),
+                "max_results": ToolParameter(
+                    type="integer",
+                    description="Maximum number of results (default: 10)",
+                    required=False,
                 ),
             },
             requires_permission=True,
+            permission_scope="example",
         )
-        self._max_results = max_results
+        self._api_key = api_key
+        self._timeout = timeout
 
-    async def execute(self, **kwargs: Any) -> str:
-        query = kwargs.get("query", "")
-        results = await self._search(query, self._max_results)
-        return self._format_results(results)
+    async def execute(self, query: str, max_results: int = 10, **kwargs: Any) -> str:
+        """Execute the example tool."""
+        if not query:
+            return "Error: query parameter is required"
+
+        # Tool implementation here
+        result = f"Searched for '{query}' with max {max_results} results"
+        return result
+
+    @classmethod
+    def from_config(cls, config: "Config") -> "ExampleTool | None":
+        """Create tool from configuration."""
+        # Check if enabled
+        if not getattr(config.tools, "example", False):
+            return None
+
+        # Get permissions config
+        perms = config.permissions.example
+        if not perms.get("enabled", False):
+            return None
+
+        # Extract parameters
+        api_key = perms.get("api_key")
+        if not api_key:
+            return None  # Required parameter missing
+
+        timeout = perms.get("timeout", 30)
+
+        return cls(api_key=api_key, timeout=timeout)
 ```
 
-## OpenAI Function Calling Format
+## File Organization
 
-Tools are automatically converted to OpenAI function calling format:
+- **base.py**: Core tool system (Tool, ConfigurableTool, ToolRegistry)
+- **file_tools.py**: File system operations
+- **web_tools.py**: Web search and fetch
+- **shell_tools.py**: Shell command execution
+- **time_tools.py**: Time and timezone tools
+- **math_tools.py**: Mathematical operations
+- **location_tools.py**: Location information
+- **skill_tools.py**: Skill management tools
+- **context7_tools.py**: Context7 integration
 
-```python
-{
-    "type": "function",
-    "function": {
-        "name": "web_search",
-        "description": "Search the web for information...",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query"
-                }
-            },
-            "required": ["query"]
-        }
-    }
-}
-```
+Create new tool files following this pattern, and import them in `__init__.py`.
 
-Conversion is handled automatically by the `Tool.to_openai_format()` method, no manual implementation needed.
+## Adding Your Tool to the System
 
-## Anthropic Format Support
+1. Create your tool file in `exobrain/tools/`
+2. Import it in `exobrain/tools/__init__.py`:
+   ```python
+   from exobrain.tools import (
+       # ... existing imports
+       your_tool_module,
+   )
+   ```
+3. Add configuration to `config.yaml`:
 
-Tools also support Anthropic's format via `Tool.to_anthropic_format()`:
+   ```yaml
+   tools:
+     your_category: true
 
-```python
-{
-    "name": "web_search",
-    "description": "Search the web for information...",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "query": {
-                "type": "string",
-                "description": "The search query"
-            }
-        },
-        "required": ["query"]
-    }
-}
-```
+   permissions:
+     your_category:
+       enabled: true
+       # your tool parameters
+   ```
 
-## Testing Recommendations
+4. The tool will automatically be discovered and registered!
 
-```python
-# test_my_tool.py
-import asyncio
-from exobrain.tools.my_tool import MyNewTool
-
-
-async def test_basic_functionality():
-    tool = MyNewTool(param1="test", param2=42)
-
-    # Test normal case
-    result = await tool.execute(param1="value")
-    assert "expected" in result
-
-    # Test error handling
-    result = await tool.execute(param1="")
-    assert "Error" in result
-
-    print("✓ All tests passed")
-
-
-if __name__ == "__main__":
-    asyncio.run(test_basic_functionality())
-```
-
-## Common Questions
-
-### Q: Why must `super().__init__()` be called first?
-
-**A:** `Tool` inherits from Pydantic `BaseModel`, which requires model initialization before setting attributes. Setting attributes first will raise `AttributeError`.
-
-### Q: Can I raise exceptions in `execute()`?
-
-**A:** Not recommended. You should catch exceptions and return error message strings so the Agent can see the error and try alternative approaches.
-
-### Q: How to handle tools requiring streaming output?
-
-**A:** Current version returns strings. Future versions may support `AsyncIterator[str]` for streaming output.
-
-### Q: How to handle permission check failures?
-
-**A:** Call `_check_permission()` in `execute()`. If it returns `False`, directly return the error message:
-
-```python
-allowed, message = self._check_permission(path)
-if not allowed:
-    return message  # Return error, don't raise exception
-```
-
-## Reference Implementations
-
-Check existing tool implementations for inspiration:
-
-- **Simple tools**: `time_tools.py` - `GetCurrentTimeTool`
-- **Permission control**: `file_tools.py` - `ReadFileTool`, `ListDirectoryTool`
-- **Complex permissions**: `shell_tools.py` - `ShellExecuteTool`
-- **Network requests**: `web_tools.py` - `WebSearchTool`, `WebFetchTool`
-- **Safe evaluation**: `math_tools.py` - `MathEvaluateTool`
-- **External integration**: `context7_tools.py` - `Context7SearchTool`
-
-## Permission Scope Reference
-
-Common permission scopes used in ExoBrain:
-
-- `file_system` - File operations (read, write, edit, search)
-- `shell_execution` - Shell command execution
-- `web_access` - Web search and fetching
-- `location` - Location services
-
----
-
-**Remember: Tools are designed to be easily understood and correctly used by Agents, not to showcase complex programming techniques. Keep it simple, clear, and reliable.**
+No manual registration in `cli/util.py` is needed - the system handles everything automatically.

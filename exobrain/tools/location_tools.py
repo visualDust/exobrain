@@ -4,17 +4,23 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import httpx
 
-from exobrain.tools.base import Tool
+from exobrain.tools.base import ConfigurableTool, register_tool
+
+if TYPE_CHECKING:
+    from exobrain.config import Config
 
 logger = logging.getLogger(__name__)
 
 
-class GetUserLocationTool(Tool):
+@register_tool
+class GetUserLocationTool(ConfigurableTool):
     """Fetch approximate user location via IP-based lookup."""
+
+    config_key: ClassVar[str] = "location"
 
     def __init__(self, provider_url: str, timeout: int = 10, token: str | None = None) -> None:
         super().__init__(
@@ -83,3 +89,26 @@ class GetUserLocationTool(Tool):
             lines.append(coords_line)
 
         return "\n".join(lines)
+
+    @classmethod
+    def from_config(cls, config: "Config") -> "GetUserLocationTool | None":
+        """Create tool instance from configuration.
+
+        Args:
+            config: Global application configuration
+
+        Returns:
+            GetUserLocationTool instance if location is enabled, None otherwise
+        """
+        if not getattr(config.tools, "location", False):
+            return None
+
+        location_perms = config.permissions.location
+        if not location_perms.get("enabled", False):
+            return None
+
+        provider_url = location_perms.get("provider_url", "https://ipinfo.io/json")
+        timeout = location_perms.get("timeout", 10)
+        token = location_perms.get("token")
+
+        return cls(provider_url=provider_url, timeout=timeout, token=token)

@@ -1,14 +1,23 @@
 """Core agent implementation."""
 
-import inspect
+import asyncio
 import json
 import logging
 from datetime import datetime
 from enum import Enum
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Awaitable, Callable
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from exobrain.agent.events import (
+    EventManager,
+    IterationStartedEvent,
+    StateChangedEvent,
+    ToolCompletedEvent,
+    ToolStartedEvent,
+)
+from exobrain.memory.handlers.base import MessageHandler
+from exobrain.memory.handlers.truncating import TruncatingMessageHandler
 from exobrain.providers.base import Message, ModelProvider, ModelResponse
 from exobrain.tools.base import Tool, ToolRegistry
 
@@ -35,12 +44,18 @@ class Agent(BaseModel):
     state: AgentState = AgentState.IDLE
     conversation_history: list[Message] = []
     system_prompt: str = "You are a helpful AI assistant."
+    message_handler: MessageHandler | None = None
     max_iterations: int = 500
     temperature: float = 0.7
     stream: bool = False
     verbose: bool = False  # Show detailed tool execution info
-    permission_callback: Any = None  # Callback for permission requests
-    status_callback: Any = None  # Callback for status updates
+
+    # Event system for broadcasting agent state and execution events
+    events: EventManager = Field(default_factory=EventManager)
+
+    # Permission handler (special case - needs to return a value)
+    permission_handler: Callable[[dict[str, Any]], Awaitable[bool]] | None = None
+
     runtime_permissions: dict = {}  # Runtime-granted permissions
 
     class Config:
@@ -74,6 +89,15 @@ class Agent(BaseModel):
             return False
         return iteration >= self.max_iterations
 
+    def model_post_init(self, __context: Any) -> None:
+        """Initialize after model creation."""
+        # Create default handler if not provided
+        if self.message_handler is None:
+            self.message_handler = TruncatingMessageHandler(
+                model_provider=self.model_provider,
+                load_percentage=0.5,
+            )
+
     async def process_message(self, user_message: str) -> str | AsyncIterator[str]:
         """Process a user message and return a response.
 
@@ -86,8 +110,11 @@ class Agent(BaseModel):
         # Add user message to history
         self.add_message(Message(role="user", content=user_message))
 
-        # Build messages including system prompt
-        messages = [Message(role="system", content=self.system_prompt)] + self.conversation_history
+        # Use handler to prepare messages for API
+        messages = self.message_handler.prepare_for_api(
+            messages=self.conversation_history,
+            system_prompt=self.system_prompt,
+        )
 
         # Get available tools
         available_tools = self.get_available_tools()
@@ -109,23 +136,23 @@ class Agent(BaseModel):
         else:
             return await self._process_non_streaming(messages, tools_spec, available_tools)
 
-    async def _notify_status(self, state: AgentState, **details: Any) -> None:
-        """Notify status callback and keep internal state in sync."""
-        self.state = state
+    async def _emit_state_change(self, new_state: AgentState, **details: Any) -> None:
+        """Emit state change event and update internal state.
 
-        if not self.status_callback:
-            return
+        Args:
+            new_state: The new agent state
+            **details: Additional details to include in the event
+        """
+        old_state = self.state
+        self.state = new_state
 
-        try:
-            callback = self.status_callback
-            if inspect.iscoroutinefunction(callback):
-                await callback(state, details)
-            else:
-                result = callback(state, details)
-                if inspect.isawaitable(result):
-                    await result
-        except Exception:
-            logger.debug("Status callback error", exc_info=True)
+        event = StateChangedEvent(
+            old_state=old_state.value,
+            new_state=new_state.value,
+            iteration=details.get("iteration"),
+            details=details,
+        )
+        await self.events.emit(event)
 
     def _summarize_tool_result(self, result: Any, max_lines: int = 3, max_chars: int = 200) -> str:
         """Summarize tool output for UI displays."""
@@ -155,7 +182,16 @@ class Agent(BaseModel):
 
         while self._should_continue_iteration(iteration):
             iteration += 1
-            await self._notify_status(AgentState.THINKING, iteration=iteration)
+
+            # Emit iteration started event
+            await self.events.emit(
+                IterationStartedEvent(
+                    iteration=iteration,
+                    max_iterations=self.max_iterations,
+                )
+            )
+
+            await self._emit_state_change(AgentState.THINKING, iteration=iteration)
 
             # Call model
             try:
@@ -167,7 +203,7 @@ class Agent(BaseModel):
                 )
             except Exception as e:
                 logger.error(f"Error calling model: {e}")
-                await self._notify_status(AgentState.ERROR, iteration=iteration, error=str(e))
+                await self._emit_state_change(AgentState.ERROR, iteration=iteration, error=str(e))
                 return f"Error: {e}"
 
             if not isinstance(response, ModelResponse):
@@ -176,7 +212,7 @@ class Agent(BaseModel):
 
             # Check if model wants to call tools
             if response.tool_calls:
-                await self._notify_status(
+                await self._emit_state_change(
                     AgentState.TOOL_CALLING,
                     iteration=iteration,
                     tool_count=len(response.tool_calls),
@@ -207,7 +243,7 @@ class Agent(BaseModel):
                         logger.warning(f"Skipping tool call with empty name: {tool_call}")
                         continue
 
-                    await self._notify_status(
+                    await self._emit_state_change(
                         AgentState.TOOL_CALLING,
                         iteration=iteration,
                         tool=tool_name,
@@ -252,14 +288,14 @@ class Agent(BaseModel):
                 continue
             else:
                 # No tool calls, this is the final response
-                await self._notify_status(AgentState.FINISHED, iteration=iteration)
+                await self._emit_state_change(AgentState.FINISHED, iteration=iteration)
                 final_response = response.content or ""
                 self.add_message(Message(role="assistant", content=final_response))
                 break
 
         if self._reached_max_iterations(iteration):
             logger.warning("Reached maximum iterations")
-            await self._notify_status(AgentState.ERROR, iteration=iteration)
+            await self._emit_state_change(AgentState.ERROR, iteration=iteration)
             return final_response or "Error: reached maximum iterations"
 
         return final_response
@@ -276,7 +312,16 @@ class Agent(BaseModel):
 
         while self._should_continue_iteration(iteration):
             iteration += 1
-            await self._notify_status(AgentState.THINKING, iteration=iteration)
+
+            # Emit iteration started event
+            await self.events.emit(
+                IterationStartedEvent(
+                    iteration=iteration,
+                    max_iterations=self.max_iterations,
+                )
+            )
+
+            await self._emit_state_change(AgentState.THINKING, iteration=iteration)
 
             try:
                 response_stream = await self.model_provider.generate(
@@ -297,7 +342,7 @@ class Agent(BaseModel):
                     if isinstance(chunk, ModelResponse):
                         if chunk.content:
                             accumulated_content += chunk.content
-                            await self._notify_status(
+                            await self._emit_state_change(
                                 AgentState.STREAMING,
                                 iteration=iteration,
                             )
@@ -341,7 +386,7 @@ class Agent(BaseModel):
 
                 # After streaming, handle tool calls if any
                 if tool_calls_list:
-                    await self._notify_status(
+                    await self._emit_state_change(
                         AgentState.TOOL_CALLING,
                         iteration=iteration,
                         tool_count=len(tool_calls_list),
@@ -368,7 +413,7 @@ class Agent(BaseModel):
                             logger.warning(f"Skipping tool call with empty name: {tool_call}")
                             continue
 
-                        await self._notify_status(
+                        await self._emit_state_change(
                             AgentState.TOOL_CALLING,
                             iteration=iteration,
                             tool=tool_name,
@@ -415,12 +460,12 @@ class Agent(BaseModel):
                 else:
                     # No tool calls, this is the final response
                     self.add_message(Message(role="assistant", content=accumulated_content))
-                    await self._notify_status(AgentState.FINISHED, iteration=iteration)
+                    await self._emit_state_change(AgentState.FINISHED, iteration=iteration)
                     break
 
             except Exception as e:
                 logger.error(f"Error in streaming: {e}")
-                await self._notify_status(AgentState.ERROR, iteration=iteration, error=str(e))
+                await self._emit_state_change(AgentState.ERROR, iteration=iteration, error=str(e))
                 yield f"\n\nError: {e}"
                 break
 
@@ -428,7 +473,7 @@ class Agent(BaseModel):
             logger.warning(
                 "Reached maximum iterations in streaming mode, if you want to increase the maximum, please adjust the settings."
             )
-            await self._notify_status(AgentState.ERROR, iteration=iteration)
+            await self._emit_state_change(AgentState.ERROR, iteration=iteration)
             yield "\n\n⚠️ I reached the maximum number of iterations, if you want to increase the maximum, please adjust the settings."
 
     def _truncate_for_display(self, text: str, max_lines: int = 3) -> str:
@@ -476,6 +521,17 @@ class Agent(BaseModel):
         if tool is None:
             return f"Error: tool '{tool_name}' not found"
 
+        # Emit tool started event
+        await self.events.emit(
+            ToolStartedEvent(
+                tool_name=tool_name,
+                tool_args=tool_args,
+            )
+        )
+
+        # Record start time for execution duration
+        start_time = asyncio.get_event_loop().time()
+
         # Execute tool
         try:
             result = await tool.execute(**tool_args)
@@ -493,10 +549,10 @@ class Agent(BaseModel):
                     # but just in case, return the result
                     return str(result)
 
-                # Request permission if callback is set
-                if self.permission_callback:
+                # Request permission if handler is set
+                if self.permission_handler:
                     logger.debug(f"Requesting permission for: {denied_info}")
-                    granted = await self.permission_callback(denied_info)
+                    granted = await self.permission_handler(denied_info)
 
                     if granted:
                         # Permission granted, apply to tool's permission list
@@ -512,32 +568,49 @@ class Agent(BaseModel):
                             logger.warning(f"Tool {tool_name} still denied after permission grant")
                             return f"Permission granted but tool still denied: {result}"
 
+            # Calculate execution time
+            execution_time_ms = (asyncio.get_event_loop().time() - start_time) * 1000
+
             # Log tool result in verbose mode
             if self.verbose:
                 result_preview = self._truncate_for_display(str(result))
                 logger.warning(f"[TOOL RESULT] {tool_name}:\n{result_preview}")
 
+            # Emit tool completed event
             summary = self._summarize_tool_result(result)
-            tool_event_data = {"name": tool_name, "summary": summary, "error": False}
-            logger.info(
-                f"[TOOL EVENT] Sending tool_event for {tool_name}, summary length: {len(summary)}"
-            )
-            await self._notify_status(
-                AgentState.TOOL_CALLING,
-                tool=tool_name,
-                tool_event=tool_event_data,
+            await self.events.emit(
+                ToolCompletedEvent(
+                    tool_name=tool_name,
+                    tool_args=tool_args,
+                    result=str(result),
+                    success=True,
+                    execution_time_ms=execution_time_ms,
+                    summary=summary,
+                )
             )
 
             return str(result)
         except Exception as e:
+            # Calculate execution time
+            execution_time_ms = (asyncio.get_event_loop().time() - start_time) * 1000
+
             logger.error(f"Error executing tool {tool_name}: {e}")
             if self.verbose:
                 logger.warning(f"[TOOL ERROR] {tool_name}: {e}")
-            await self._notify_status(
-                AgentState.TOOL_CALLING,
-                tool=tool_name,
-                tool_event={"name": tool_name, "summary": f"Error: {e}", "error": True},
+
+            # Emit tool error event
+            await self.events.emit(
+                ToolCompletedEvent(
+                    tool_name=tool_name,
+                    tool_args=tool_args,
+                    result="",
+                    success=False,
+                    error=str(e),
+                    execution_time_ms=execution_time_ms,
+                    summary=f"Error: {e}",
+                )
             )
+
             return f"Error executing tool: {e}"
 
     def _apply_permission_to_tool(
@@ -661,6 +734,9 @@ class Agent(BaseModel):
             "write_file",
             "list_directory",
             "search_files",
+            "edit_file",
+            "grep_files",
+            "read_pdf",
         ]:
             denied_info["resource"] = tool_args.get("path", "")
             if "editing not allowed" in error_msg.lower():

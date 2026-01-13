@@ -2,15 +2,21 @@
 
 import re
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import aiofiles
 
-from exobrain.tools.base import Tool, ToolParameter
+from exobrain.tools.base import ConfigurableTool, ToolParameter, register_tool
+
+if TYPE_CHECKING:
+    from exobrain.config import Config
 
 
-class ReadFileTool(Tool):
+@register_tool
+class ReadFileTool(ConfigurableTool):
     """Tool to read file contents."""
+
+    config_key: ClassVar[str] = "file_system"
 
     def __init__(self, allowed_paths: list[str], denied_paths: list[str]) -> None:
         super().__init__(
@@ -83,9 +89,34 @@ class ReadFileTool(Tool):
         except Exception as e:
             return f"Error reading file: {e}"
 
+    @classmethod
+    def from_config(cls, config: "Config") -> "ReadFileTool | None":
+        """Create tool instance from configuration.
 
-class WriteFileTool(Tool):
+        Args:
+            config: Global application configuration
+
+        Returns:
+            ReadFileTool instance if file_system is enabled, None otherwise
+        """
+        if not config.tools.file_system:
+            return None
+
+        fs_perms = config.permissions.file_system
+        if not fs_perms.get("enabled", True):
+            return None
+
+        allowed_paths = fs_perms.get("allowed_paths") or []
+        denied_paths = fs_perms.get("denied_paths") or []
+
+        return cls(allowed_paths, denied_paths)
+
+
+@register_tool
+class WriteFileTool(ConfigurableTool):
     """Tool to write contents to a file."""
+
+    config_key: ClassVar[str] = "file_system"
 
     def __init__(
         self,
@@ -179,9 +210,36 @@ class WriteFileTool(Tool):
         except Exception as e:
             return f"Error writing file: {e}"
 
+    @classmethod
+    def from_config(cls, config: "Config") -> "WriteFileTool | None":
+        """Create tool instance from configuration.
 
-class ListDirectoryTool(Tool):
+        Args:
+            config: Global application configuration
+
+        Returns:
+            WriteFileTool instance if file_system is enabled, None otherwise
+        """
+        if not config.tools.file_system:
+            return None
+
+        fs_perms = config.permissions.file_system
+        if not fs_perms.get("enabled", True):
+            return None
+
+        allowed_paths = fs_perms.get("allowed_paths") or []
+        denied_paths = fs_perms.get("denied_paths") or []
+        max_file_size = fs_perms.get("max_file_size", 10485760)
+        allow_edit = fs_perms.get("allow_edit", False)
+
+        return cls(allowed_paths, denied_paths, max_file_size, allow_edit)
+
+
+@register_tool
+class ListDirectoryTool(ConfigurableTool):
     """Tool to list directory contents."""
+
+    config_key: ClassVar[str] = "file_system"
 
     def __init__(self, allowed_paths: list[str], denied_paths: list[str]) -> None:
         super().__init__(
@@ -261,9 +319,34 @@ class ListDirectoryTool(Tool):
         except Exception as e:
             return f"Error listing directory: {e}"
 
+    @classmethod
+    def from_config(cls, config: "Config") -> "ListDirectoryTool | None":
+        """Create tool instance from configuration.
 
-class SearchFilesTool(Tool):
+        Args:
+            config: Global application configuration
+
+        Returns:
+            ListDirectoryTool instance if file_system is enabled, None otherwise
+        """
+        if not config.tools.file_system:
+            return None
+
+        fs_perms = config.permissions.file_system
+        if not fs_perms.get("enabled", True):
+            return None
+
+        allowed_paths = fs_perms.get("allowed_paths") or []
+        denied_paths = fs_perms.get("denied_paths") or []
+
+        return cls(allowed_paths, denied_paths)
+
+
+@register_tool
+class SearchFilesTool(ConfigurableTool):
     """Tool to search for files matching a pattern."""
+
+    config_key: ClassVar[str] = "file_system"
 
     def __init__(self, allowed_paths: list[str], denied_paths: list[str]) -> None:
         super().__init__(
@@ -352,9 +435,34 @@ class SearchFilesTool(Tool):
         except Exception as e:
             return f"Error searching files: {e}"
 
+    @classmethod
+    def from_config(cls, config: "Config") -> "SearchFilesTool | None":
+        """Create tool instance from configuration.
 
-class EditFileTool(Tool):
+        Args:
+            config: Global application configuration
+
+        Returns:
+            SearchFilesTool instance if file_system is enabled, None otherwise
+        """
+        if not config.tools.file_system:
+            return None
+
+        fs_perms = config.permissions.file_system
+        if not fs_perms.get("enabled", True):
+            return None
+
+        allowed_paths = fs_perms.get("allowed_paths") or []
+        denied_paths = fs_perms.get("denied_paths") or []
+
+        return cls(allowed_paths, denied_paths)
+
+
+@register_tool
+class EditFileTool(ConfigurableTool):
     """Tool to perform precise string replacement in files."""
+
+    config_key: ClassVar[str] = "file_system"
 
     def __init__(
         self,
@@ -374,7 +482,7 @@ class EditFileTool(Tool):
                 ),
                 "old_string": ToolParameter(
                     type="string",
-                    description="Exact string to be replaced (must appear exactly once in the file)",
+                    description="Exact string to be replaced (must appear exactly in the file)",
                     required=True,
                 ),
                 "new_string": ToolParameter(
@@ -484,9 +592,36 @@ class EditFileTool(Tool):
         except Exception as e:
             return f"Error writing file: {e}"
 
+    @classmethod
+    def from_config(cls, config: "Config") -> "EditFileTool | None":
+        """Create tool instance from configuration.
 
-class GrepFileTool(Tool):
+        Args:
+            config: Global application configuration
+
+        Returns:
+            EditFileTool instance if file_system is enabled, None otherwise
+        """
+        if not config.tools.file_system:
+            return None
+
+        fs_perms = config.permissions.file_system
+        if not fs_perms.get("enabled", True):
+            return None
+
+        allowed_paths = fs_perms.get("allowed_paths") or []
+        denied_paths = fs_perms.get("denied_paths") or []
+        max_file_size = fs_perms.get("max_file_size", 10485760)
+        allow_edit = fs_perms.get("allow_edit", False)
+
+        return cls(allowed_paths, denied_paths, max_file_size, allow_edit)
+
+
+@register_tool
+class GrepFileTool(ConfigurableTool):
     """Tool to search for text patterns in file contents."""
+
+    config_key: ClassVar[str] = "file_system"
 
     def __init__(self, allowed_paths: list[str], denied_paths: list[str]) -> None:
         super().__init__(
@@ -642,3 +777,25 @@ class GrepFileTool(Tool):
             )
 
         return "\n".join(output)
+
+    @classmethod
+    def from_config(cls, config: "Config") -> "GrepFileTool | None":
+        """Create tool instance from configuration.
+
+        Args:
+            config: Global application configuration
+
+        Returns:
+            GrepFileTool instance if file_system is enabled, None otherwise
+        """
+        if not config.tools.file_system:
+            return None
+
+        fs_perms = config.permissions.file_system
+        if not fs_perms.get("enabled", True):
+            return None
+
+        allowed_paths = fs_perms.get("allowed_paths") or []
+        denied_paths = fs_perms.get("denied_paths") or []
+
+        return cls(allowed_paths, denied_paths)

@@ -1,16 +1,22 @@
 """Time management tools."""
 
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
 from zoneinfo import ZoneInfo
 
 import httpx
 
-from exobrain.tools.base import Tool, ToolParameter
+from exobrain.tools.base import ConfigurableTool, ToolParameter, register_tool
+
+if TYPE_CHECKING:
+    from exobrain.config import Config
 
 
-class GetCurrentTimeTool(Tool):
+@register_tool
+class GetCurrentTimeTool(ConfigurableTool):
     """Tool to get the current time."""
+
+    config_key: ClassVar[str] = "time_management"
 
     def __init__(self) -> None:
         super().__init__(
@@ -43,9 +49,26 @@ class GetCurrentTimeTool(Tool):
         except Exception as e:
             return f"Error formatting time: {e}"
 
+    @classmethod
+    def from_config(cls, config: "Config") -> "GetCurrentTimeTool | None":
+        """Create tool instance from configuration.
 
-class GetWorldTimeTool(Tool):
+        Args:
+            config: Global application configuration
+
+        Returns:
+            GetCurrentTimeTool instance if time_management is enabled, None otherwise
+        """
+        if not config.tools.time_management:
+            return None
+        return cls()
+
+
+@register_tool
+class GetWorldTimeTool(ConfigurableTool):
     """Get current time for a specific timezone using a network time API."""
+
+    config_key: ClassVar[str] = "time_management"
 
     def __init__(self, default_tz: str = "UTC") -> None:
         super().__init__(
@@ -91,3 +114,17 @@ class GetWorldTimeTool(Tool):
                 return dt.strftime(fmt)
             except Exception:
                 return f"Error fetching time for {tz_name}: {e}"
+
+    @classmethod
+    def from_config(cls, config: "Config") -> "GetWorldTimeTool | None":
+        """Create tool instance from configuration.
+
+        Args:
+            config: Global application configuration
+
+        Returns:
+            GetWorldTimeTool instance if time_management is enabled, None otherwise
+        """
+        if not config.tools.time_management:
+            return None
+        return cls()

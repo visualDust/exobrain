@@ -1,15 +1,21 @@
 """Skill management tools for agent."""
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from exobrain.tools.base import Tool, ToolParameter
+from exobrain.tools.base import ConfigurableTool, ToolParameter, register_tool
+
+if TYPE_CHECKING:
+    from exobrain.config import Config
 
 logger = logging.getLogger(__name__)
 
 
-class GetSkillTool(Tool):
+@register_tool
+class GetSkillTool(ConfigurableTool):
     """Tool for getting detailed instructions for a specific skill."""
+
+    config_key: ClassVar[str] = "skills"
 
     def __init__(self, skills_manager: Any):
         """Initialize GetSkillTool.
@@ -72,9 +78,37 @@ class GetSkillTool(Tool):
         logger.debug(f"Retrieved skill: {skill_name}")
         return "".join(result)
 
+    @classmethod
+    def from_config(cls, config: "Config") -> "GetSkillTool | None":
+        """Create tool instance from configuration.
 
-class SearchSkillsTool(Tool):
+        Args:
+            config: Global application configuration
+
+        Returns:
+            GetSkillTool instance if skills are enabled, None otherwise
+        """
+        if not getattr(config.skills, "enabled", True):
+            return None
+
+        # Initialize skills manager
+        from exobrain.skills.loader import load_default_skills
+        from exobrain.skills.manager import SkillsManager
+
+        loader = load_default_skills(config)
+        skills_manager = SkillsManager(loader.skills)
+
+        if not skills_manager.skills:
+            return None
+
+        return cls(skills_manager=skills_manager)
+
+
+@register_tool
+class SearchSkillsTool(ConfigurableTool):
     """Tool for searching skills by query."""
+
+    config_key: ClassVar[str] = "skills"
 
     def __init__(self, skills_manager: Any):
         """Initialize SearchSkillsTool.
@@ -144,9 +178,37 @@ class SearchSkillsTool(Tool):
         logger.debug(f"Searched skills with query '{query}', found {len(selected_skills)} results")
         return "".join(result)
 
+    @classmethod
+    def from_config(cls, config: "Config") -> "SearchSkillsTool | None":
+        """Create tool instance from configuration.
 
-class ListSkillsTool(Tool):
+        Args:
+            config: Global application configuration
+
+        Returns:
+            SearchSkillsTool instance if skills are enabled, None otherwise
+        """
+        if not getattr(config.skills, "enabled", True):
+            return None
+
+        # Initialize skills manager
+        from exobrain.skills.loader import load_default_skills
+        from exobrain.skills.manager import SkillsManager
+
+        loader = load_default_skills(config)
+        skills_manager = SkillsManager(loader.skills)
+
+        if not skills_manager.skills:
+            return None
+
+        return cls(skills_manager=skills_manager)
+
+
+@register_tool
+class ListSkillsTool(ConfigurableTool):
     """Tool for listing all available skills."""
+
+    config_key: ClassVar[str] = "skills"
 
     def __init__(self, skills_manager: Any):
         """Initialize ListSkillsTool.
@@ -199,3 +261,28 @@ class ListSkillsTool(Tool):
 
         logger.debug(f"Listed {len(skills)} skills")
         return "".join(result)
+
+    @classmethod
+    def from_config(cls, config: "Config") -> "ListSkillsTool | None":
+        """Create tool instance from configuration.
+
+        Args:
+            config: Global application configuration
+
+        Returns:
+            ListSkillsTool instance if skills are enabled, None otherwise
+        """
+        if not getattr(config.skills, "enabled", True):
+            return None
+
+        # Initialize skills manager
+        from exobrain.skills.loader import load_default_skills
+        from exobrain.skills.manager import SkillsManager
+
+        loader = load_default_skills(config)
+        skills_manager = SkillsManager(loader.skills)
+
+        if not skills_manager.skills:
+            return None
+
+        return cls(skills_manager=skills_manager)

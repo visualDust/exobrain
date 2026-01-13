@@ -222,8 +222,6 @@ def run_config_wizard() -> dict:
         config["cli"] = {}
     if "logging" not in config:
         config["logging"] = {}
-    if "performance" not in config:
-        config["performance"] = {}
 
     return config
 

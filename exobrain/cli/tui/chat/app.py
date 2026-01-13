@@ -15,14 +15,15 @@ from textual.containers import Container
 from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Label, Static
 
-from exobrain.agent.core import AgentState as CoreAgentState
-from exobrain.cli.tui.widgets import ChatHistory, InputArea, StatusBar, ToolSidebar
-from exobrain.cli.tui.widgets.header import Header, HeaderInfo
-from exobrain.cli.tui.widgets.status_bar import AgentState
-from exobrain.cli.tui.widgets.tool_sidebar import ToolEvent
+from exobrain.agent.base import AgentState as CoreAgentState
+from exobrain.agent.events import BaseEvent, StateChangedEvent, ToolCompletedEvent
+from exobrain.cli.tui.chat.widgets import ChatHistory, InputArea, StatusBar, ToolSidebar
+from exobrain.cli.tui.chat.widgets.header import Header, HeaderInfo
+from exobrain.cli.tui.chat.widgets.status_bar import AgentState
+from exobrain.cli.tui.chat.widgets.tool_sidebar import ToolEvent
 
 if TYPE_CHECKING:
-    from exobrain.agent.core import Agent
+    from exobrain.agent.base import Agent
 
 
 @dataclass
@@ -322,75 +323,73 @@ class ChatApp(App):
             summary += " ..."
         return summary
 
-    async def handle_agent_status(self, state: CoreAgentState, details: dict | None = None) -> None:
-        """Handle status updates from the agent."""
-        details = details or {}
+    async def handle_agent_event(self, event: BaseEvent) -> None:
+        """Handle agent events.
+
+        Args:
+            event: The event to handle
+        """
+        if isinstance(event, StateChangedEvent):
+            await self._handle_state_change(event)
+        elif isinstance(event, ToolCompletedEvent):
+            await self._handle_tool_completed(event)
+
+    async def _handle_state_change(self, event: StateChangedEvent) -> None:
+        """Handle state change events."""
+        # Convert string state back to CoreAgentState enum
+        try:
+            state = CoreAgentState(event.new_state)
+        except ValueError:
+            state = CoreAgentState.IDLE
+
         mapped_state = self._map_agent_state(state)
 
-        async def do_update() -> None:
-            status_bar = self.query_one("#status-bar", StatusBar)
-            chat_history = self.query_one("#chat-history", ChatHistory)
+        status_bar = self.query_one("#status-bar", StatusBar)
+        chat_history = self.query_one("#chat-history", ChatHistory)
 
-            status_bar.update_state(
-                mapped_state,
-                current_tool=details.get("tool"),
-                iteration=details.get("iteration"),
-                error_message=details.get("error"),
-            )
+        status_bar.update_state(
+            mapped_state,
+            current_tool=event.details.get("tool"),
+            iteration=event.iteration,
+            error_message=event.details.get("error"),
+        )
 
-            # Show/hide thinking indicator based on state
-            if state == CoreAgentState.THINKING:
-                iteration = details.get("iteration", 0)
-                await chat_history.show_thinking(f"Thinking... (iteration {iteration})")
-            elif state in (
-                CoreAgentState.STREAMING,
-                CoreAgentState.TOOL_CALLING,
-                CoreAgentState.FINISHED,
-            ):
-                await chat_history.hide_thinking()
+        # Show/hide thinking indicator based on state
+        if state == CoreAgentState.THINKING:
+            iteration = event.iteration or 0
+            await chat_history.show_thinking(f"Thinking... (iteration {iteration})")
+        elif state in (
+            CoreAgentState.STREAMING,
+            CoreAgentState.TOOL_CALLING,
+            CoreAgentState.FINISHED,
+        ):
+            await chat_history.hide_thinking()
 
-            # Handle thinking blocks (if provided)
-            thinking_content = details.get("thinking")
-            if thinking_content:
-                await chat_history.show_thinking_block(thinking_content)
-            elif state == CoreAgentState.STREAMING:
-                # Hide thinking block when starting to stream response
-                await chat_history.hide_thinking_block()
+        # Handle thinking blocks (if provided)
+        thinking_content = event.details.get("thinking")
+        if thinking_content:
+            await chat_history.show_thinking_block(thinking_content)
+        elif state == CoreAgentState.STREAMING:
+            # Hide thinking block when starting to stream response
+            await chat_history.hide_thinking_block()
 
-            tool_event = details.get("tool_event")
-            if tool_event:
-                # Debug logging
-                self.log.info(f"Received tool_event: {tool_event}")
+    async def _handle_tool_completed(self, event: ToolCompletedEvent) -> None:
+        """Handle tool completed events."""
+        if not event.summary:
+            return
 
-                name = tool_event.get("name", "tool")
-                summary_raw = tool_event.get("summary", "")
-                summary = self._summarize_tool_output(summary_raw)
-                is_error = bool(tool_event.get("error", False))
+        summary = self._summarize_tool_output(event.summary)
+        is_error = not event.success
 
-                self.log.info(
-                    f"Processing tool event - name: {name}, summary length: {len(summary)}, is_error: {is_error}"
-                )
+        if not summary:
+            summary = "(no output)"
 
-                if not summary:
-                    summary = "(no output)"
+        sidebar = self.query_one("#tool-sidebar", ToolSidebar)
+        await sidebar.add_event(ToolEvent(name=event.tool_name, summary=summary))
 
-                sidebar = self.query_one("#tool-sidebar", ToolSidebar)
-                await sidebar.add_event(ToolEvent(name=name, summary=summary))
-                self.log.info(f"Added event to sidebar: {name}")
-
-                # Also inline in chat history like a participant with dedicated styling
-                await chat_history.add_tool_call(name, summary, is_error=is_error)
-                self.log.info(f"Added tool call to chat history: {name}")
-
-        # Ensure UI updates run on the main loop
-        # Since handle_agent_status may be called from a worker thread,
-        # we use call_from_thread to safely schedule the update
-        try:
-            # Try to run directly if we're already on the main thread
-            asyncio.create_task(do_update())
-        except RuntimeError:
-            # If not on main thread, schedule via call_from_thread
-            self.call_from_thread(lambda: asyncio.create_task(do_update()))
+        # Also inline in chat history like a participant with dedicated styling
+        chat_history = self.query_one("#chat-history", ChatHistory)
+        await chat_history.add_tool_call(event.tool_name, summary, is_error=is_error)
 
     def set_session(self, session_id: str, session_name: Optional[str] = None) -> None:
         """Update the session info in the header.
