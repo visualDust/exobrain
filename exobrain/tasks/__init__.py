@@ -1,6 +1,11 @@
 """Task management system."""
 
-from .client import DaemonConnectionError, DaemonNotRunningError, TaskClient
+from .client import (
+    DaemonConnectionError,
+    DaemonNotRunningError,
+    DaemonVersionMismatchError,
+    TaskClient,
+)
 from .daemon import TaskDaemon
 from .executor import AgentExecutor, ProcessExecutor, TaskExecutor
 from .manager import TaskManager
@@ -18,6 +23,7 @@ __all__ = [
     "TaskClient",
     "DaemonNotRunningError",
     "DaemonConnectionError",
+    "DaemonVersionMismatchError",
     "Transport",
     "TransportServer",
     "TransportType",

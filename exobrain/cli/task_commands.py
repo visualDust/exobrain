@@ -11,6 +11,7 @@ from rich.table import Table
 from exobrain.tasks import (
     DaemonConnectionError,
     DaemonNotRunningError,
+    DaemonVersionMismatchError,
     TaskClient,
     TaskStatus,
     TaskType,
@@ -270,6 +271,9 @@ def task_submit(name: str, description: Optional[str], task_type: str) -> None:
             console.print(f"[red]✗[/red] {e}")
             raise click.Abort()
         except DaemonConnectionError as e:
+            console.print(f"[red]✗[/red] {e}")
+            raise click.Abort()
+        except DaemonVersionMismatchError as e:
             console.print(f"[red]✗[/red] {e}")
             raise click.Abort()
         except Exception as e:

@@ -59,7 +59,7 @@ Result: Both providers exist, with `default` set to `openai/gpt-4o`.
 ### Root Schema
 
 ```yaml
-version: "0.1.4" # Config version (should match package version)
+version: "0.1.5" # Config version (should match package version)
 models: { ... } # Model providers and settings
 agent: { ... } # Agent behavior configuration
 tools: { ... } # Tool enablement flags
@@ -657,7 +657,7 @@ exobrain config edit
 The `version` field in your config should match the ExoBrain package version. If there's a mismatch, ExoBrain will error and prompt you to regenerate the config.
 
 ```yaml
-version: "0.1.4" # Should match `exobrain --version`
+version: "0.1.5" # Should match `exobrain --version`
 ```
 
 To check compatibility:

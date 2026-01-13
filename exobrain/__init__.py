@@ -1,6 +1,6 @@
 """ExoBrain - A personal AI assistant with agent capabilities."""
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 __author__ = "visualdust"
 __license__ = "MIT"
 

@@ -1,12 +1,15 @@
 """Task daemon process."""
 
 import asyncio
+import json
 import logging
 import os
 import platform
 import signal
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+from exobrain import __version__
 
 from .manager import TaskManager
 from .models import TaskStatus, TaskType
@@ -233,6 +236,8 @@ class TaskDaemon:
                 return await self._handle_get_statistics(params)
             elif action == "cleanup_tasks":
                 return await self._handle_cleanup_tasks(params)
+            elif action == "get_version":
+                return {"status": "ok", "data": {"version": __version__}}
             elif action == "ping":
                 return {"status": "ok", "data": {"message": "pong"}}
             else:
@@ -487,10 +492,14 @@ class TaskDaemon:
                 # Continue running despite errors
 
     def _write_pid_file(self) -> None:
-        """Write PID file."""
+        """Write PID file with version information."""
         self.pid_file.parent.mkdir(parents=True, exist_ok=True)
+        pid_data = {
+            "pid": os.getpid(),
+            "version": __version__,
+        }
         with open(self.pid_file, "w") as f:
-            f.write(str(os.getpid()))
+            json.dump(pid_data, f)
 
     def _remove_pid_file(self) -> None:
         """Remove PID file."""

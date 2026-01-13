@@ -1,6 +1,7 @@
 """Task client for communicating with the task daemon."""
 
 import asyncio
+import json
 import os
 import platform
 import signal
@@ -9,6 +10,8 @@ import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from exobrain import __version__
 
 from .models import Task, TaskStatus, TaskType
 from .transport import Transport, TransportFactory, TransportType
@@ -109,6 +112,10 @@ class DaemonConnectionError(Exception):
     """Raised when connection to daemon fails."""
 
 
+class DaemonVersionMismatchError(Exception):
+    """Raised when daemon version doesn't match client version."""
+
+
 class TaskClient:
     """High-level client for task management."""
 
@@ -148,6 +155,7 @@ class TaskClient:
         Raises:
             DaemonNotRunningError: If daemon is not running and auto_start is False
             DaemonConnectionError: If connection fails after retries
+            DaemonVersionMismatchError: If daemon version doesn't match and has running tasks
         """
         # Check if daemon is running
         if not self.is_daemon_running():
@@ -157,6 +165,9 @@ class TaskClient:
                 raise DaemonNotRunningError(
                     "Task daemon is not running. Start it with: exobrain task daemon start"
                 )
+
+        # Check version compatibility
+        await self._check_version_compatibility()
 
         # Create transport
         self._transport = TransportFactory.create_transport(
@@ -177,6 +188,75 @@ class TaskClient:
         raise DaemonConnectionError(
             f"Failed to connect to daemon after {self.max_retries} attempts: {last_error}"
         )
+
+    async def _check_version_compatibility(self) -> None:
+        """
+        Check if daemon version matches client version.
+
+        If versions don't match:
+        - If no running tasks: automatically restart daemon
+        - If running tasks exist: raise DaemonVersionMismatchError
+
+        Raises:
+            DaemonVersionMismatchError: If version mismatch and running tasks exist
+        """
+        daemon_version = self.get_daemon_version()
+
+        # If daemon version is None (old format PID file), skip check
+        if daemon_version is None:
+            return
+
+        # Check if versions match
+        if daemon_version == __version__:
+            return
+
+        # Versions don't match - check for running tasks
+        try:
+            # Create temporary transport to check tasks
+            temp_transport = TransportFactory.create_transport(
+                self.transport_type, self.transport_config
+            )
+            await temp_transport.connect()
+
+            try:
+                # Check for running tasks
+                request = {"action": "list_tasks", "params": {"status": "running"}}
+                response = await temp_transport.send_request(request)
+
+                if response.get("status") == "ok":
+                    running_tasks = response.get("data", {}).get("tasks", [])
+
+                    if running_tasks:
+                        # Has running tasks - cannot auto-restart
+                        raise DaemonVersionMismatchError(
+                            f"Daemon version mismatch: daemon={daemon_version}, client={__version__}. "
+                            f"There are {len(running_tasks)} running task(s). "
+                            f"Please wait for tasks to complete or cancel them, then restart the daemon manually with: "
+                            f"exobrain task daemon restart"
+                        )
+
+                # No running tasks - safe to restart
+                await temp_transport.disconnect()
+
+                # Restart daemon
+                print(
+                    f"Daemon version mismatch detected (daemon={daemon_version}, client={__version__}). "
+                    f"No running tasks found. Restarting daemon..."
+                )
+                await self.restart_daemon(timeout=10.0)
+                print("Daemon restarted successfully.")
+
+            finally:
+                await temp_transport.disconnect()
+
+        except DaemonVersionMismatchError:
+            # Re-raise version mismatch errors
+            raise
+        except Exception as e:
+            # If we can't check, log warning and continue
+            print(
+                f"Warning: Could not verify daemon version compatibility: {e}. Continuing anyway..."
+            )
 
     async def disconnect(self) -> None:
         """Disconnect from the daemon."""
@@ -200,27 +280,19 @@ class TaskClient:
         Returns:
             True if daemon is running, False otherwise
         """
-        if not self.pid_file.exists():
+        pid_data = self._read_pid_file()
+        if not pid_data:
             return False
 
-        try:
-            with open(self.pid_file, "r") as f:
-                pid = int(f.read().strip())
+        pid = pid_data.get("pid")
+        if not pid:
+            return False
 
-            # Check if process exists (cross-platform)
-            if _is_process_running(pid):
-                return True
-            else:
-                # Process is dead - clean up stale PID file
-                if self.pid_file.exists():
-                    try:
-                        self.pid_file.unlink()
-                    except Exception:
-                        pass
-                return False
-
-        except (ValueError, IOError):
-            # PID file exists but is invalid - clean up
+        # Check if process exists (cross-platform)
+        if _is_process_running(pid):
+            return True
+        else:
+            # Process is dead - clean up stale PID file
             if self.pid_file.exists():
                 try:
                     self.pid_file.unlink()
@@ -235,13 +307,49 @@ class TaskClient:
         Returns:
             PID if daemon is running, None otherwise
         """
+        pid_data = self._read_pid_file()
+        return pid_data.get("pid") if pid_data else None
+
+    def get_daemon_version(self) -> Optional[str]:
+        """
+        Get daemon version.
+
+        Returns:
+            Version string if daemon is running, None otherwise
+        """
+        pid_data = self._read_pid_file()
+        return pid_data.get("version") if pid_data else None
+
+    def _read_pid_file(self) -> Optional[Dict[str, Any]]:
+        """
+        Read PID file and return data.
+
+        Returns:
+            Dictionary with 'pid' and 'version' keys, or None if file doesn't exist or is invalid
+        """
         if not self.pid_file.exists():
             return None
 
         try:
             with open(self.pid_file, "r") as f:
-                return int(f.read().strip())
-        except (ValueError, IOError):
+                content = f.read().strip()
+
+                # Try to parse as JSON (new format)
+                try:
+                    data = json.loads(content)
+                    if isinstance(data, dict) and "pid" in data:
+                        return data
+                except json.JSONDecodeError:
+                    pass
+
+                # Fall back to old format (just PID number)
+                try:
+                    pid = int(content)
+                    return {"pid": pid, "version": None}
+                except ValueError:
+                    return None
+
+        except (IOError, OSError):
             return None
 
     async def start_daemon(self, wait: bool = True, timeout: float = 5.0) -> int:
