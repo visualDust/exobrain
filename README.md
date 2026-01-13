@@ -11,11 +11,11 @@ A toy AI assistant with tool calling capabilities and file system access, runnin
 
 - 💻 **TUI Interface** - Terminal UI based on [Textual](https://github.com/Textualize/textual)
 - 🤖 **Multi-Model Support** - [OpenAI](https://openai.com/api/), [Gemini](https://aistudio.google.com/), local models (hosted via [vLLM](https://github.com/vllm-project/vllm) etc)
-- 🛠️ **Tools** - File operations, web search, shell execution
-- 🎨 **Skills System** - Integrated [Anthropic Skills](https://github.com/anthropics/skills.git)
+- 🛠️ **Tools and Skills System** - File operations, web search, shell execution. Integrated [Anthropic Skills](https://github.com/anthropics/skills.git) and allow user self defined skills.
 - 🔌 **MCP Support** - Model Context Protocol integration (currently integrated [Context7](https://context7.com/))
 - 🔒 **Permission Control** - Fine-grained permission requests and access control
 - 💬 **Session Management** - Project-level and global session storage
+- 🎯 **Background Tasks** - Create, track, and manage background tasks.
 - 📜 **Constitutional AI** - Customizable behavioral guidelines
 
 For OpenAI apis, currently up to GPT-5 is supported, while GPT-5.2 is not (due to planning is not currently supported yet), but will be added in future updates.
@@ -60,92 +60,45 @@ The wizard will guide you through:
 - Configuring API keys
 - Setting up basic features and permissions
 
-### Usage
+### Quick Start
 
 ```bash
-# Start interactive chat
-exobrain chat
+exobrain chat # Start interactive chat
+exobrain chat --model openai/gpt-5 # Use specific model
+exobrain chat --continue # Resume last session
+exobrain chat --help # see other chat options
 
-exobrain chat --no-tui  # Disable TUI interface
-
-# Ask a single question
-exobrain ask "Summarize today's news"
-
-# Use verbose mode to see tool execution details
-exobrain ask "Search for latest AI news" --verbose
-
-# Use specific model
-exobrain chat --model openai/gpt-4o
-
-# Project-level or global sessions
-exobrain chat --project   # Store in ./.exobrain/conversations
-exobrain chat --global    # Store in ~/.exobrain/data/conversations
-exobrain chat --continue  # Continue last session
-```
-
-## Configuration
-
-ExoBrain uses a hierarchical configuration system:
-
-1. Project-level config: `./.exobrain/config.yaml` (highest priority)
-2. Global config: `~/.config/exobrain/config.yaml`
-
-### Configuration Management
-
-```bash
-# View current configuration
-exobrain config show
-
-# Edit configuration
-exobrain config edit
-
-# Set/get specific values
-exobrain config set agent.max_iterations 500
-exobrain config get models.default
-
-# Model management
-exobrain models list              # List available models
-exobrain models use openai/gpt-4o # Set default model
-```
-
-### Session Management
-
-```bash
-# List all sessions
+# Manage sessions
 exobrain sessions list
-
-# Show session details
 exobrain sessions show <session-id>
+exobrain sessions --help # see other session commands
 
-# Delete sessions
-exobrain sessions delete <session-id>
-exobrain sessions delete --all --yes
+# Manage skills
+exobrain skills # manage skills in tui
+exobrain skills --help # see other skill commands
+
+# Background tasks
+exobrain tasks submit "read file ./data/report.pdf and summarize" # Submit a background task
+exobrain tasks list # List background tasks and status
+exobrain tasks show <task-id> # Show task details
+exobrain tasks --help # see other task commands
+
+# Manage constitution
+exobrain constitution list # List all constitutions
+exobrain constitution use <name> # Switch constitution
+exobrain constitution --help # see other constitution commands
+
+# Make current folder a project folder
+exobrain init
 ```
 
-### Skills System
+---
 
-```bash
-# Manage available skills in TUI
-exobrain skills
+## Documentation
 
-# Search skills
-exobrain skills list --search "pdf"
+Docs are comming soon!
 
-# Show skill details
-exobrain skills show mcp-builder
-```
-
-### Constitution (Behavioral Guidelines)
-
-Constitutions define the AI's behavior and ethical guidelines. They are managed as markdown files.
-
-```bash
-# Manage constitutions
-exobrain constitution list        # List all constitutions
-exobrain constitution create      # Create new constitution
-exobrain constitution use <name>  # Switch constitution
-exobrain constitution edit        # Edit current constitution
-```
+---
 
 ## Permission System
 
@@ -173,7 +126,9 @@ Example:
 ╰──────────────────────────────────────────────────╯
 ```
 
+---
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details
-Note that this project integrates third-party skills that may have their own licenses.
+Note that this project integrates third-party skills that may have their own licenses. See the [skills directory](exobrain/skills) for details.

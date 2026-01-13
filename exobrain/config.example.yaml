@@ -1,4 +1,4 @@
-version: "0.1.5" # ExoBrain version, auto-updated during init
+version: "0.2.0" # ExoBrain version, auto-updated during init
 models:
   default: openai/gpt-5-mini
   providers:
