@@ -464,7 +464,22 @@ def task_follow(task_id: str, poll_interval: float) -> None:
 
                 await client.follow_output(full_task_id, poll_interval)
 
-                console.print(f"\n[green]✓[/green] Task completed")
+                # Get final task status
+                task = await client.get_task(full_task_id)
+
+                # Display appropriate message based on final status
+                if task.status == TaskStatus.COMPLETED:
+                    console.print(f"\n[green]✓[/green] Task completed")
+                elif task.status == TaskStatus.FAILED:
+                    console.print(f"\n[red]✗[/red] Task failed")
+                    if task.error:
+                        console.print(f"[red]Error: {task.error}[/red]")
+                elif task.status == TaskStatus.CANCELLED:
+                    console.print(f"\n[yellow]⚠[/yellow] Task was cancelled")
+                elif task.status == TaskStatus.INTERRUPTED:
+                    console.print(f"\n[yellow]⚠[/yellow] Task was interrupted")
+                else:
+                    console.print(f"\n[dim]Task status: {task.status.value}[/dim]")
 
         except KeyboardInterrupt:
             console.print(f"\n[yellow]Stopped following task (task is still running)[/yellow]")

@@ -8,8 +8,6 @@ chroma_db/
 models/
 logs/
 cache/
-exobrain/skills/anthropic/
-exobrain/skills/obsidian/
 .claude/
 
 # Byte-compiled / optimized / DLL files

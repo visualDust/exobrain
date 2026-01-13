@@ -150,6 +150,7 @@ class AgentExecutor(TaskExecutor):
         logger.info(f"AgentExecutor.execute() started for task_id={self.task.task_id}")
 
         # Import here to avoid circular dependency
+        from exobrain.agent.events import EventType, IterationStartedEvent
         from exobrain.cli.util import create_agent_from_config
         from exobrain.config import load_config
 
@@ -200,9 +201,18 @@ class AgentExecutor(TaskExecutor):
             agent, _ = create_agent_from_config(config, model_spec=model_spec)
             logger.info("Agent instance created")
 
+            # Register event handler to track iterations
+            async def on_iteration_started(event):
+                if isinstance(event, IterationStartedEvent):
+                    self.task.iterations = event.iteration
+                    progress = min(event.iteration / event.max_iterations, 1.0)
+                    await self._update_progress(progress)
+                    logger.info(f"Iteration {event.iteration}/{event.max_iterations} started")
+
+            agent.events.register(on_iteration_started, EventType.ITERATION_STARTED)
+
             # Run agent
             logger.info("Starting agent.process_message()")
-            iteration = 0
 
             # Process the message
             result = await agent.process_message(prompt)
@@ -220,27 +230,17 @@ class AgentExecutor(TaskExecutor):
                     chunk_str = str(chunk)
                     truncated_chunk = self._truncate_tool_output(chunk_str)
                     await self._append_output(truncated_chunk)
-
-                    # Update iteration count
-                    iteration += 1
-                    self.task.iterations = iteration
-
-                    # Update progress
-                    progress = min(iteration / max_iterations, 1.0)
-                    await self._update_progress(progress)
-
-                    # Check max iterations
-                    if iteration >= max_iterations:
-                        logger.info(f"Max iterations reached: {iteration}")
-                        break
             else:
                 # Non-streaming response
                 await self._append_output(str(result))
-                iteration = 1
-                self.task.iterations = iteration
-                await self._update_progress(1.0)
+                # For non-streaming, set iterations to 1 if not already set
+                if self.task.iterations == 0:
+                    self.task.iterations = 1
+                    await self._update_progress(1.0)
 
-            logger.info(f"AgentExecutor.execute() completed for task_id={self.task.task_id}")
+            logger.info(
+                f"AgentExecutor.execute() completed for task_id={self.task.task_id}, iterations={self.task.iterations}"
+            )
 
         except Exception as e:
             # Log error
