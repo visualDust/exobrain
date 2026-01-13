@@ -243,10 +243,22 @@ def task_submit(name: str, description: Optional[str], task_type: str) -> None:
         try:
             async with TaskClient() as client:
                 with console.status("[cyan]Creating task...[/cyan]"):
+                    # For process tasks, the name is the command to execute
+                    config = {}
+                    if task_type == "process":
+                        config["command"] = name
+                        # Use command as name if no description provided
+                        task_name = description or name
+                        task_description = ""
+                    else:
+                        task_name = name
+                        task_description = description or ""
+
                     task = await client.create_task(
-                        name=name,
-                        description=description or "",
+                        name=task_name,
+                        description=task_description,
                         task_type=TaskType(task_type),
+                        config=config,
                     )
 
                 console.print(f"[green]✓[/green] Task created: [cyan]{task.task_id}[/cyan]")
@@ -390,18 +402,18 @@ def task_show(task_id: str) -> None:
                     content += f"Duration: {t.duration:.1f}s\n"
 
                 # Task-specific fields
-                if t.task_type == TaskType.AGENT:
-                    if t.iterations is not None:
-                        content += f"Iterations: {t.iterations}/{t.max_iterations}\n"
-                elif t.task_type == TaskType.PROCESS:
-                    if t.command:
-                        content += f"Command: {t.command}\n"
-                    if t.working_directory:
-                        content += f"Working Directory: {t.working_directory}\n"
-                    if t.exit_code is not None:
-                        content += f"Exit Code: {t.exit_code}\n"
-                    if t.pid:
-                        content += f"PID: {t.pid}\n"
+                # Agent task fields
+                if t.iterations is not None:
+                    content += f"Iterations: {t.iterations}/{t.max_iterations}\n"
+                # Process task fields
+                if t.command:
+                    content += f"Command: {t.command}\n"
+                if t.working_directory:
+                    content += f"Working Directory: {t.working_directory}\n"
+                if t.exit_code is not None:
+                    content += f"Exit Code: {t.exit_code}\n"
+                if t.pid:
+                    content += f"PID: {t.pid}\n"
 
                 console.print(Panel(content, title="Task Details", border_style="cyan"))
 

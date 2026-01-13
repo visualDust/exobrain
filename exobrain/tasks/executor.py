@@ -74,6 +74,77 @@ class AgentExecutor(TaskExecutor):
     Runs an agent with the given configuration.
     """
 
+    def _truncate_tool_output(self, text: str, max_lines: int = 50, max_chars: int = 1200) -> str:
+        """
+        Truncate tool output in task output text while preserving agent messages.
+
+        Args:
+            text: Text that may contain tool output
+            max_lines: Maximum number of lines for tool output
+            max_chars: Maximum number of characters for tool output
+
+        Returns:
+            Text with tool output truncated if needed
+
+        todo)): this is a workaround solution, we should handle this better with unified event handling.
+        """
+        # Check if this chunk contains tool output (format: "[Tool: tool_name]\n{output}\n")
+        if not text.startswith("\n\n[Tool: ") and "[Tool: " not in text:
+            # Not a tool output chunk, return as-is
+            return text
+
+        # Extract tool name and output
+        lines = text.split("\n")
+        tool_header_idx = -1
+        for i, line in enumerate(lines):
+            if line.startswith("[Tool: "):
+                tool_header_idx = i
+                break
+
+        if tool_header_idx == -1:
+            return text
+
+        # Split into: prefix + tool header + tool output + suffix
+        prefix_lines = lines[:tool_header_idx]
+        tool_header = lines[tool_header_idx]
+        output_start_idx = tool_header_idx + 1
+
+        # Find where tool output ends (empty line or end of text)
+        output_end_idx = len(lines)
+        for i in range(output_start_idx, len(lines)):
+            if not lines[i].strip():
+                output_end_idx = i
+                break
+
+        output_lines = lines[output_start_idx:output_end_idx]
+        suffix_lines = lines[output_end_idx:]
+
+        # Check if truncation is needed
+        output_text = "\n".join(output_lines)
+        needs_truncation = len(output_lines) > max_lines or len(output_text) > max_chars
+
+        if not needs_truncation:
+            return text
+
+        # Truncate output
+        if len(output_lines) > max_lines:
+            truncated_output_lines = output_lines[:max_lines]
+            remaining_lines = len(output_lines) - max_lines
+            truncated_output_lines.append(
+                f"[Content truncated: {remaining_lines} more lines. Total {len(output_lines)} lines.]"
+            )
+        else:
+            truncated_output_lines = output_lines
+
+        truncated_output = "\n".join(truncated_output_lines)
+        if len(truncated_output) > max_chars:
+            truncated_output = truncated_output[:max_chars]
+            truncated_output += "\n[Content truncated at {max_chars} characters.]"
+
+        # Reconstruct text
+        result_lines = prefix_lines + [tool_header] + [truncated_output] + suffix_lines
+        return "\n".join(result_lines)
+
     async def execute(self) -> None:
         """Execute agent task."""
         logger.info(f"AgentExecutor.execute() started for task_id={self.task.task_id}")
@@ -108,13 +179,6 @@ class AgentExecutor(TaskExecutor):
             agent, _ = create_agent_from_config(config, model_spec=model_spec)
             logger.info("Agent instance created")
 
-            # Set up output capture
-            output_buffer = []
-
-            def capture_output(text: str):
-                """Capture agent output."""
-                output_buffer.append(text)
-
             # Run agent
             logger.info("Starting agent.process_message()")
             iteration = 0
@@ -131,8 +195,10 @@ class AgentExecutor(TaskExecutor):
                         logger.info("Task cancelled, breaking loop")
                         break
 
-                    # Append output
-                    await self._append_output(str(chunk))
+                    # Truncate tool output if present, keep agent messages full
+                    chunk_str = str(chunk)
+                    truncated_chunk = self._truncate_tool_output(chunk_str)
+                    await self._append_output(truncated_chunk)
 
                     # Update iteration count
                     iteration += 1
@@ -231,9 +297,12 @@ class ProcessExecutor(TaskExecutor):
             # Wait for process to complete
             exit_code = await self._process.wait()
 
-            # Store exit code
+            # Store exit code and save task BEFORE checking exit code
             self.task.exit_code = exit_code
             await self.storage.save_task(self.task)
+
+            # Append exit code info to output
+            await self._append_output(f"\n--- Process exited with code {exit_code} ---\n")
 
             # Check exit code
             if exit_code != 0:

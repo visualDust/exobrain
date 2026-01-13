@@ -257,7 +257,7 @@ class TaskStorage:
         if not output_file.exists():
             return ""
 
-        with open(output_file, "r") as f:
+        with open(output_file, "r", encoding="utf-8", errors="replace") as f:
             f.seek(offset)
             if limit:
                 return f.read(limit)

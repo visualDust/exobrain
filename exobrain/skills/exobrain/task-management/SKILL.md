@@ -206,9 +206,12 @@ Cancel a running background task.
 
 ### Process Task Configuration
 
-- Use absolute paths for `working_directory`
+- Provide the shell command in the `command` field of config
+- Use absolute paths for `working_directory` when needed
 - Ensure commands are safe and won't cause harm
 - Consider timeout implications for long-running commands
+- Exit codes are automatically captured and displayed
+- Both stdout and stderr are captured in task output
 
 ### Monitoring
 
@@ -232,16 +235,20 @@ Users can also manage tasks via CLI:
 # Start daemon
 exobrain task daemon start
 
-# Submit task
-exobrain task submit "Research Task" --type agent -d "<what should the agent do?>"
+# Submit agent task
+exobrain task submit "Research Python async patterns" --type agent
+
+# Submit process task (command is the first argument)
+exobrain task submit "echo hello" --type process
+exobrain task submit "ls -la /tmp" --type process
 
 # List tasks
 exobrain task list
 
-# Show task details
+# Show task details (includes exit code for process tasks)
 exobrain task show <task_id>
 
-# Follow task output in real-time
+# Follow task output in real-time (handles all encodings gracefully)
 exobrain task follow <task_id>
 
 # Cancel task
@@ -254,10 +261,132 @@ exobrain task delete <task_id>
 exobrain task daemon stop
 ```
 
+## Task Output Handling
+
+### Agent Tasks
+
+- Agent reasoning and responses are logged in full
+- Tool outputs (e.g., PDF content, large files) are automatically truncated to 50 lines / 1200 characters
+- Truncation notices indicate how much content was removed
+- Full output always available via `task follow` command
+
+### Process Tasks
+
+- Both stdout and stderr are captured
+- Exit code is displayed in task details and output
+- Non-UTF-8 output is handled gracefully (invalid characters replaced with �)
+- Process output format: `--- Process exited with code N ---`
+
 ## Examples
 
-### Example 1: Research Task
+### Example 1: Agent Research Task
+
+**User Request:**
 
 ```
-User: "Research the latest developments in quantum computing"
+"Research the latest developments in quantum computing and summarize the key breakthroughs"
 ```
+
+**Agent Response:**
+
+```
+I'll create a background task to research quantum computing developments.
+
+[Creates task with create_task tool]
+
+I've started a research task (task-abc123) that will investigate recent quantum computing breakthroughs.
+This will run in the background while we continue our conversation. I'll check on it periodically and
+let you know when it's complete.
+
+[After task completes, retrieves output with get_task_output]
+
+The research is complete! Here are the key findings:
+- Recent breakthrough in error correction...
+- New quantum algorithm for...
+[Summary of findings]
+```
+
+### Example 2: Process Task for Build
+
+**User Request:**
+
+```
+"Run the test suite in the background"
+```
+
+**Agent Response:**
+
+```
+I'll run the test suite as a background task.
+
+[Creates task with create_task tool]
+{
+  "name": "Run Test Suite",
+  "task_type": "process",
+  "config": {
+    "command": "pytest tests/ -v",
+    "working_directory": "/path/to/project"
+  }
+}
+
+Test suite is now running in the background (task-def456). I'll monitor its progress.
+
+[Checks status periodically]
+
+The tests have completed! Exit code: 0 (success)
+All 47 tests passed. Here's the summary:
+[Test results]
+```
+
+### Example 3: Parallel Data Processing
+
+**User Request:**
+
+```
+"Analyze these three log files and find any errors"
+```
+
+**Agent Response:**
+
+```
+I'll analyze all three log files in parallel using background tasks.
+
+[Creates 3 process tasks]
+- Task 1: Analyzing server.log
+- Task 2: Analyzing application.log
+- Task 3: Analyzing database.log
+
+All tasks are running. I'll collect the results as they complete.
+
+[Monitors tasks and collects results]
+
+Analysis complete! Here's what I found:
+- server.log: 3 errors related to...
+- application.log: No errors found
+- database.log: 1 critical error...
+```
+
+## Troubleshooting
+
+### Task Fails Immediately
+
+- **Process tasks**: Check that the command is valid and executable
+- **Agent tasks**: Verify the prompt is clear and not empty
+- Check task output with `get_task_output` for error details
+
+### Task Stuck in PENDING
+
+- Daemon may not be running - check with `exobrain task daemon status`
+- Restart daemon if needed: `exobrain task daemon restart`
+
+### Cannot Read Task Output
+
+- Task may still be running - check status first
+- For non-UTF-8 output, invalid characters are automatically replaced with �
+- Use `task follow` command for real-time output streaming
+
+### Exit Code Not Shown
+
+- Exit codes are only available for process tasks
+- Task must complete (not be cancelled) for exit code to be captured
+- Check task status shows "completed" or "failed"
