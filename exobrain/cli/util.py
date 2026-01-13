@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import Any
 
 from exobrain.agent.base import Agent
@@ -81,6 +82,28 @@ def create_agent_from_config(
 
     # Create tool registry
     tool_registry = ToolRegistry()
+
+    # Check if .exobrain folder exists in current directory (workspace config)
+    # If it exists, automatically add current directory to allowed directories
+    cwd = Path.cwd()
+    exobrain_dir = cwd / ".exobrain"
+    if exobrain_dir.exists() and exobrain_dir.is_dir():
+        # Ensure shell_execution permissions exist in config
+        if not hasattr(config.permissions, "shell_execution"):
+            logger.warning("shell_execution permissions not found in config")
+        else:
+            shell_exec_config = config.permissions.shell_execution
+            if not hasattr(shell_exec_config, "allowed_directories"):
+                # Initialize allowed_directories if it doesn't exist
+                shell_exec_config.allowed_directories = []
+
+            # Add current directory if not already in allowed list
+            cwd_str = str(cwd)
+            if cwd_str not in shell_exec_config.allowed_directories:
+                shell_exec_config.allowed_directories.append(cwd_str)
+                logger.info(
+                    f"Detected .exobrain workspace config, automatically allowing current directory: {cwd_str}"
+                )
 
     # Auto-register all tools from configuration (including skill tools)
     auto_register_tools(config, tool_registry)

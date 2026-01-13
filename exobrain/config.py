@@ -447,7 +447,7 @@ def create_default_config(output_path: str | Path) -> None:
         "permissions": {
             "file_system": {
                 "enabled": True,
-                "allowed_paths": ["~/Documents", "~/Desktop"],
+                "allowed_paths": ["~/Documents", "~/Desktop", "/tmp"],
                 "denied_paths": ["~/.ssh", "~/.aws"],
                 "max_file_size": 10485760,
                 "allow_edit": False,

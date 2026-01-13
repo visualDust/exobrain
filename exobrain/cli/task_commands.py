@@ -248,12 +248,20 @@ def task_submit(name: str, description: Optional[str], task_type: str) -> None:
                     config = {}
                     if task_type == "process":
                         config["command"] = name
+                        # Save current working directory for process tasks
+                        import os
+
+                        config["working_directory"] = os.getcwd()
                         # Use command as name if no description provided
                         task_name = description or name
                         task_description = ""
                     else:
                         task_name = name
                         task_description = description or ""
+                        # Save current working directory for agent tasks too
+                        import os
+
+                        config["working_directory"] = os.getcwd()
 
                     task = await client.create_task(
                         name=task_name,

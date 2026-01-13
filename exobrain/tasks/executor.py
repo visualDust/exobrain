@@ -159,6 +159,27 @@ class AgentExecutor(TaskExecutor):
             config, _ = load_config()
             logger.info(f"Config loaded successfully")
 
+            # Check if task has a working directory with .exobrain folder
+            # If so, add it to allowed directories for shell execution
+            working_dir = self.task.config.get("working_directory")
+            if working_dir:
+                working_dir_path = Path(working_dir)
+                exobrain_dir = working_dir_path / ".exobrain"
+                if exobrain_dir.exists() and exobrain_dir.is_dir():
+                    # Ensure shell_execution permissions exist in config
+                    if hasattr(config.permissions, "shell_execution"):
+                        shell_exec_config = config.permissions.shell_execution
+                        if not hasattr(shell_exec_config, "allowed_directories"):
+                            shell_exec_config.allowed_directories = []
+
+                        # Add working directory if not already in allowed list
+                        working_dir_str = str(working_dir_path)
+                        if working_dir_str not in shell_exec_config.allowed_directories:
+                            shell_exec_config.allowed_directories.append(working_dir_str)
+                            logger.info(
+                                f"Detected .exobrain in task working directory, automatically allowing: {working_dir_str}"
+                            )
+
             # Get agent configuration from task config
             agent_config = self.task.config.copy()
 

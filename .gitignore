@@ -1,6 +1,16 @@
-# Manually ignored files
+# project specific
 config.yaml
 .ignored
+.exobrain/
+*.db
+*.sqlite
+chroma_db/
+models/
+logs/
+cache/
+exobrain/skills/anthropic/
+exobrain/skills/obsidian/
+.claude/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -139,16 +149,6 @@ poetry.lock
 # OS
 .DS_Store
 Thumbs.db
-
-# ExoBrain specific
-.exobrain/
-*.db
-*.sqlite
-chroma_db/
-models/
-logs/
-cache/
-exobrain/skills/anthropic/
 
 # Secrets
 *.key
