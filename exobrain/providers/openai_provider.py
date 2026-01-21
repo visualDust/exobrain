@@ -111,37 +111,67 @@ class OpenAIProvider(ModelProvider):
         payload: dict[str, Any],
     ) -> AsyncIterator[ModelResponse]:
         """Stream responses from OpenAI."""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
         async with httpx.AsyncClient(timeout=60.0) as client:
-            async with client.stream(
-                "POST",
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-            ) as response:
-                response.raise_for_status()
+            try:
+                async with client.stream(
+                    "POST",
+                    f"{self.base_url}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                ) as response:
+                    response.raise_for_status()
 
-                async for line in response.aiter_lines():
-                    if line.startswith("data: "):
-                        data = line[6:]
-                        if data == "[DONE]":
-                            break
+                    async for line in response.aiter_lines():
+                        if line.startswith("data: "):
+                            data = line[6:]
+                            if data == "[DONE]":
+                                break
 
-                        try:
-                            chunk = json.loads(data)
-                            if "choices" in chunk and len(chunk["choices"]) > 0:
-                                delta = chunk["choices"][0].get("delta", {})
-                                content = delta.get("content", "")
-                                tool_calls = delta.get("tool_calls", None)
+                            try:
+                                chunk = json.loads(data)
+                                if "choices" in chunk and len(chunk["choices"]) > 0:
+                                    delta = chunk["choices"][0].get("delta", {})
+                                    content = delta.get("content", "")
+                                    tool_calls = delta.get("tool_calls", None)
 
-                                if content or tool_calls:
-                                    yield ModelResponse(
-                                        content=content,
-                                        tool_calls=tool_calls,
-                                        finish_reason=chunk["choices"][0].get("finish_reason"),
-                                        usage=chunk.get("usage"),
-                                    )
-                        except json.JSONDecodeError:
-                            continue
+                                    if content or tool_calls:
+                                        yield ModelResponse(
+                                            content=content,
+                                            tool_calls=tool_calls,
+                                            finish_reason=chunk["choices"][0].get("finish_reason"),
+                                            usage=chunk.get("usage"),
+                                        )
+                            except json.JSONDecodeError:
+                                continue
+            except httpx.HTTPStatusError as e:
+                # Log detailed error information
+                logger.error(f"HTTP {e.response.status_code} error from OpenAI API")
+                logger.error(f"Request URL: {e.request.url}")
+                logger.error(
+                    f"Request payload (messages count): {len(payload.get('messages', []))}"
+                )
+
+                # Log each message in the payload for debugging
+                for i, msg in enumerate(payload.get("messages", [])):
+                    logger.error(
+                        f"Message {i}: role={msg.get('role')}, "
+                        f"content={repr(msg.get('content'))[:100]}, "
+                        f"has_tool_calls={bool(msg.get('tool_calls'))}, "
+                        f"has_tool_call_id={bool(msg.get('tool_call_id'))}"
+                    )
+
+                # Try to get error details from response
+                try:
+                    error_body = e.response.json()
+                    logger.error(f"API error response: {json.dumps(error_body, indent=2)}")
+                except:
+                    logger.error(f"API error response (raw): {e.response.text}")
+
+                raise
 
     def _parse_response(self, response_data: dict[str, Any]) -> ModelResponse:
         """Parse OpenAI response."""
@@ -166,9 +196,15 @@ class OpenAIProvider(ModelProvider):
 
     def _message_to_openai(self, message: Message) -> dict[str, Any]:
         """Convert Message to OpenAI format."""
+        # For assistant messages with tool_calls, content should be null if empty
+        # OpenAI API doesn't accept empty string for assistant with tool_calls
+        content = message.content
+        if message.role == "assistant" and message.tool_calls and not content:
+            content = None
+
         openai_msg: dict[str, Any] = {
             "role": message.role,
-            "content": message.content,
+            "content": content,
         }
 
         if message.name:

@@ -93,14 +93,15 @@ def create_agent_from_config(
             logger.warning("shell_execution permissions not found in config")
         else:
             shell_exec_config = config.permissions.shell_execution
-            if not hasattr(shell_exec_config, "allowed_directories"):
+            # shell_exec_config is a dict, not an object with attributes
+            if "allowed_directories" not in shell_exec_config:
                 # Initialize allowed_directories if it doesn't exist
-                shell_exec_config.allowed_directories = []
+                shell_exec_config["allowed_directories"] = []
 
             # Add current directory if not already in allowed list
             cwd_str = str(cwd)
-            if cwd_str not in shell_exec_config.allowed_directories:
-                shell_exec_config.allowed_directories.append(cwd_str)
+            if cwd_str not in shell_exec_config["allowed_directories"]:
+                shell_exec_config["allowed_directories"].append(cwd_str)
                 logger.info(
                     f"Detected .exobrain workspace config, automatically allowing current directory: {cwd_str}"
                 )

@@ -147,6 +147,43 @@ class TruncatingMessageHandler(MessageHandler):
         # Reverse back to chronological order
         loaded.reverse()
 
+        # Fix orphaned tool messages: if the first message(s) are tool messages,
+        # we need to include the assistant message with tool_calls that triggered them
+        if loaded:
+            # Collect all leading tool messages
+            leading_tool_call_ids = []
+            for msg in loaded:
+                if msg.get("role") == "tool":
+                    tool_call_id = msg.get("tool_call_id")
+                    if tool_call_id:
+                        leading_tool_call_ids.append(tool_call_id)
+                else:
+                    # Stop at first non-tool message
+                    break
+
+            # If we have orphaned tool messages, find their parent assistant message
+            if leading_tool_call_ids:
+                # Find the index of the first loaded message in all_messages
+                first_loaded_idx = all_messages.index(loaded[0])
+
+                # Search backwards from that point to find the assistant message with tool_calls
+                for i in range(first_loaded_idx - 1, -1, -1):
+                    msg = all_messages[i]
+                    if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                        # Check if this assistant message contains any of the tool_call_ids
+                        tool_calls = msg.get("tool_calls", [])
+                        tool_call_ids_in_msg = {tc.get("id") for tc in tool_calls}
+                        if any(tcid in tool_call_ids_in_msg for tcid in leading_tool_call_ids):
+                            # Found the assistant message, prepend it
+                            msg_tokens = self.estimate_message_tokens(msg)
+                            loaded.insert(0, msg)
+                            total_tokens += msg_tokens
+                            logger.debug(
+                                f"Prepended assistant message with tool_calls to fix orphaned tool messages "
+                                f"(tool_call_ids={leading_tool_call_ids})"
+                            )
+                            break
+
         truncated_count = len(all_messages) - len(loaded)
 
         result = LoadResult(
