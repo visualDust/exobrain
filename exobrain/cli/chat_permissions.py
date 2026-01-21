@@ -1,6 +1,7 @@
 """Permission request and management for ExoBrain CLI."""
 
 import logging
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -102,8 +103,6 @@ def update_permission(denied_info: dict[str, Any], scope: str, agent: Any, confi
         if tool_name == "shell_execute":
             shell_tool = agent.tool_registry.get("shell_execute")
             if shell_tool:
-                from pathlib import Path
-
                 if permission_type == "directory":
                     # Add to tool's allowed directories
                     resolved_path = Path(resource).expanduser().resolve()

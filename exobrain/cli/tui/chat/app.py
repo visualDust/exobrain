@@ -31,7 +31,10 @@ class ChatAppCallbacks:
     """Callbacks for integrating ChatApp with external systems."""
 
     on_message: Optional[
-        Callable[[str, str, Optional[str], Optional[str], Optional[str]], None]
+        Callable[
+            [str, str, Optional[str], Optional[str], Optional[list[dict[str, Any]]], Optional[str]],
+            None,
+        ]
     ] = None
     on_clear: Optional[Callable[[], None]] = None
     on_exit: Optional[Callable[[], None]] = None
@@ -460,7 +463,7 @@ class ChatApp(App):
         if self._callbacks.on_message:
             # Generate timestamp when user submits message
             timestamp = datetime.now().isoformat()
-            self._callbacks.on_message("user", user_message, timestamp=timestamp)
+            self._callbacks.on_message("user", user_message, None, None, None, timestamp)
 
         self._process_message(user_message)
 
@@ -542,21 +545,40 @@ class ChatApp(App):
 
             if self._callbacks.on_message and full_response.strip():
                 self._callbacks.on_message(
-                    "assistant", full_response, timestamp=assistant_timestamp
+                    "assistant", full_response, None, None, None, assistant_timestamp
                 )
 
             # Save all new messages including tool messages
             if self._agent and self._callbacks.on_message:
                 new_messages = self._agent.conversation_history[history_len_before:]
                 for msg in new_messages:
-                    # Skip user and assistant messages as they are already saved
-                    if msg.role not in ("user", "assistant"):
-                        # Save tool and other message types with full metadata including timestamp
+                    # Skip user messages as they are already saved
+                    # Save assistant messages with tool_calls, and all tool messages
+                    if msg.role == "user":
+                        continue
+                    elif msg.role == "assistant":
+                        # Only save assistant messages that have tool_calls
+                        # (the final text response was already saved above)
+                        if msg.tool_calls:
+                            # For assistant messages with tool_calls, content can be None or non-empty
+                            # OpenAI API doesn't accept empty string for assistant with tool_calls
+                            content = msg.content if msg.content else None
+                            self._callbacks.on_message(
+                                msg.role,
+                                content or "",  # Convert None to "" for storage
+                                name=msg.name,
+                                tool_call_id=msg.tool_call_id,
+                                tool_calls=msg.tool_calls,
+                                timestamp=msg.timestamp,
+                            )
+                    else:
+                        # Save tool and other message types with full metadata
                         self._callbacks.on_message(
                             msg.role,
                             msg.content or "",
                             name=msg.name,
                             tool_call_id=msg.tool_call_id,
+                            tool_calls=None,
                             timestamp=msg.timestamp,
                         )
 

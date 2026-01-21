@@ -880,6 +880,7 @@ async def run_tui_chat_session(
         content: str,
         name: str | None = None,
         tool_call_id: str | None = None,
+        tool_calls: list[dict[str, Any]] | None = None,
         timestamp: str | None = None,
     ) -> None:
         nonlocal current_session_id, first_user_message
@@ -899,6 +900,7 @@ async def run_tui_chat_session(
                 content=content,
                 name=name,
                 tool_call_id=tool_call_id,
+                tool_calls=tool_calls,
                 timestamp=timestamp,
             )
             conversation_manager.save_message(current_session_id, msg)

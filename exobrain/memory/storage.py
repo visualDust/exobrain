@@ -161,9 +161,10 @@ class ConversationStorage:
         except Exception as e:
             logger.error(f"Failed to load messages from {session_id}: {e}")
 
-        # Sort messages by timestamp to ensure correct chronological order
-        # This is important because tool messages may be saved out of order
-        messages.sort(key=lambda m: m.get("timestamp", ""))
+        # Don't sort by timestamp - trust the order messages were written to the file
+        # Timestamps can be incorrect when messages are created during tool execution
+        # but saved later when the session is created
+        # messages.sort(key=lambda m: m.get("timestamp", ""))
 
         return messages
 

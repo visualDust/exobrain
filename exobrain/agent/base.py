@@ -466,7 +466,14 @@ class Agent(BaseModel):
             except Exception as e:
                 logger.error(f"Error in streaming: {e}")
                 await self._emit_state_change(AgentState.ERROR, iteration=iteration, error=str(e))
-                yield f"\n\nError: {e}"
+
+                # Add error message to conversation history
+                error_message = f"\n\nError: {e}"
+                self.add_message(
+                    Message(role="assistant", content=accumulated_content + error_message)
+                )
+
+                yield error_message
                 break
 
         if self._reached_max_iterations(iteration):
